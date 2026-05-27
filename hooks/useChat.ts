@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { Message } from '@/types/database'
+import type { Message, Profile } from '@/types/database'
 
 export function useChat(roomId: string | null, userId: string | null) {
   const [messages, setMessages] = useState<Message[]>([])
@@ -52,7 +52,7 @@ export function useChat(roomId: string | null, userId: string | null) {
             .select('id,nickname,username')
             .eq('id', msg.sender_id)
             .single()
-          setMessages((prev) => [...prev, { ...msg, sender: sender || undefined }])
+          setMessages((prev) => [...prev, { ...msg, sender: sender ? (sender as unknown as Profile) : undefined }])
           scrollToBottom()
           // Mark as read if we're in the room
           if (userId && msg.sender_id !== userId) {

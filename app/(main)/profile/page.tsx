@@ -10,7 +10,7 @@ import { maskStudentId, formatDate } from '@/lib/utils'
 import type { Profile, Review, SkillLevel } from '@/types/database'
 import toast from 'react-hot-toast'
 
-interface ReviewWithMatch extends Review {
+interface ReviewWithMatch extends Omit<Review, 'reviewer' | 'reviewee' | 'match'> {
   match?: { team_name: string; sport: string }
   reviewer?: { nickname: string }
 }
