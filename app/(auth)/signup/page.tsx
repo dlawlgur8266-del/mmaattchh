@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Eye, EyeOff, UserPlus, CheckCircle, XCircle, Trophy, Swords, GraduationCap, ChevronDown, Search } from 'lucide-react'
+import { Eye, EyeOff, UserPlus, CheckCircle, XCircle, Trophy, Swords, GraduationCap, ChevronDown, Search, Shield } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { SkillLevel } from '@/types/database'
 import { CBNU_DEPARTMENTS } from '@/data/departments'
@@ -46,6 +46,7 @@ export default function SignupPage() {
   const [checkLoading, setCheckLoading] = useState({ username: false, nickname: false })
   const [checked, setChecked] = useState<CheckState>({ username: null, nickname: null })
   const [errors, setErrors] = useState<Partial<Record<keyof FormState | 'general', string>>>({})
+  const [privacyConsent, setPrivacyConsent] = useState(false)
 
   // 학과 검색 드롭다운
   const [deptSearch, setDeptSearch] = useState('')
@@ -131,7 +132,8 @@ export default function SignupPage() {
     form.fullName.length >= 2 &&
     form.nickname.length >= 2 &&
     form.studentId.length === 10 &&
-    !!form.department
+    !!form.department &&
+    privacyConsent
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -308,26 +310,6 @@ export default function SignupPage() {
           {errors.nickname && <p className="text-red-500 text-xs mt-1">{errors.nickname}</p>}
         </div>
 
-        {/* 학번 */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">학번</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            className="input-field"
-            placeholder="10자리 학번 (예: 2024123456)"
-            value={form.studentId}
-            onChange={(e) => {
-              const val = e.target.value.replace(/\D/g, '').slice(0, 10)
-              handleChange('studentId', val)
-            }}
-          />
-          {errors.studentId && <p className="text-red-500 text-xs mt-1">{errors.studentId}</p>}
-          {form.studentId.length === 10 && !errors.studentId && (
-            <p className="text-green-500 text-xs mt-1">✓ 올바른 형식의 학번입니다.</p>
-          )}
-        </div>
-
         {/* ─── 학과 선택 (검색 드롭다운) ─── */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5 flex items-center gap-1.5">
@@ -418,6 +400,26 @@ export default function SignupPage() {
           )}
         </div>
 
+        {/* 학번 */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">학번</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            className="input-field"
+            placeholder="10자리 학번 (예: 2024123456)"
+            value={form.studentId}
+            onChange={(e) => {
+              const val = e.target.value.replace(/\D/g, '').slice(0, 10)
+              handleChange('studentId', val)
+            }}
+          />
+          {errors.studentId && <p className="text-red-500 text-xs mt-1">{errors.studentId}</p>}
+          {form.studentId.length === 10 && !errors.studentId && (
+            <p className="text-green-500 text-xs mt-1">✓ 올바른 형식의 학번입니다.</p>
+          )}
+        </div>
+
         {/* ─── 스포츠 실력 ─── */}
         <div className="border border-slate-100 rounded-2xl p-4 space-y-3 bg-slate-50">
           <div className="flex items-center gap-2">
@@ -477,6 +479,48 @@ export default function SignupPage() {
             </button>
           </div>
           <p className="text-xs text-slate-500">현재까지 참가한 공모전 횟수를 선택해주세요</p>
+        </div>
+
+        {/* ─── 개인정보보호법 동의 ─── */}
+        <div className="border border-slate-200 rounded-2xl overflow-hidden">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
+            <p className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+              <Shield size={14} className="text-primary" />
+              개인정보 수집 및 이용 동의
+              <span className="text-red-500 text-xs font-normal">(필수)</span>
+            </p>
+          </div>
+          <div className="p-4 space-y-2 max-h-44 overflow-y-auto text-xs text-slate-500 leading-relaxed bg-white">
+            <p className="font-semibold text-slate-700">■ 개인정보 수집·이용에 관한 사항</p>
+            <p>충북 매치(CHUNGBUK-MATCH)는 대한민국 개인정보보호법에 따라 이용자의 개인정보를 안전하게 관리합니다.</p>
+            <p className="font-semibold text-slate-700 mt-2">1. 수집하는 개인정보 항목</p>
+            <p>· 필수: 아이디, 비밀번호, 성명(실명), 닉네임, 학번, 소속 학과</p>
+            <p>· 선택: 스포츠 실력 수준, 공모전 출전 횟수</p>
+            <p className="font-semibold text-slate-700 mt-2">2. 개인정보의 수집·이용 목적</p>
+            <p>· 회원제 서비스 제공 및 본인 확인</p>
+            <p>· 스포츠 매치 및 공모전 팀 매칭 서비스 제공</p>
+            <p>· 서비스 이용 통계 및 서비스 개선</p>
+            <p className="font-semibold text-slate-700 mt-2">3. 개인정보의 보유·이용 기간</p>
+            <p>회원 탈퇴 시 즉시 파기합니다. 단, 관련 법령에 의해 보존이 필요한 경우 해당 법령에서 정한 기간 동안 보관됩니다.</p>
+            <p className="font-semibold text-slate-700 mt-2">4. 동의 거부 권리 및 불이익</p>
+            <p>개인정보 수집·이용에 동의하지 않을 수 있으나, 동의하지 않을 경우 회원가입 및 서비스 이용이 제한됩니다.</p>
+            <p className="font-semibold text-slate-700 mt-2">■ 관계 법령</p>
+            <p>개인정보보호법 제15조(개인정보의 수집·이용), 제16조(개인정보의 수집 제한), 제22조(동의를 받는 방법)</p>
+          </div>
+          <div className="px-4 py-3 border-t border-slate-200 bg-slate-50">
+            <label className="flex items-center gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={privacyConsent}
+                onChange={(e) => setPrivacyConsent(e.target.checked)}
+                className="w-4 h-4 accent-primary"
+              />
+              <span className="text-sm font-semibold text-slate-700">
+                위 개인정보 수집·이용 내용을 확인하였으며,{' '}
+                <span className="text-primary">동의합니다</span>
+              </span>
+            </label>
+          </div>
         </div>
 
         {errors.general && (

@@ -46,6 +46,7 @@ export default function ProfilePage() {
   const [nicknameInput, setNicknameInput] = useState('')
   const [savingNickname, setSavingNickname] = useState(false)
   const [savingLevel, setSavingLevel] = useState(false)
+  const [savingCount, setSavingCount] = useState(false)
 
   // 내 매치글
   const [myMatches, setMyMatches] = useState<Match[]>([])
@@ -287,6 +288,16 @@ export default function ProfilePage() {
     setSavingLevel(false)
   }
 
+  // ────────────── 공모전 출전 횟수 저장 ──────────────
+  const saveContestCount = async (count: number) => {
+    if (!profile) return
+    setSavingCount(true)
+    const { error } = await supabase.from('profiles').update({ contest_count: count }).eq('id', profile.id)
+    if (error) toast.error('수정에 실패했습니다.')
+    else { setProfile((prev) => prev ? { ...prev, contest_count: count } : prev); toast.success('공모전 출전 횟수가 변경되었습니다!') }
+    setSavingCount(false)
+  }
+
   // ────────────── 매치글 수정 ──────────────
   const openEdit = (match: Match) => {
     setEditingMatch(match)
@@ -469,6 +480,37 @@ export default function ProfilePage() {
                 {l}
               </button>
             ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-sm font-semibold text-slate-700 mb-2">공모전 출전 횟수</p>
+          <div className="grid grid-cols-4 gap-2">
+            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+              <button
+                key={n}
+                onClick={() => saveContestCount(n)}
+                disabled={savingCount}
+                className={`py-2 rounded-xl border-2 font-semibold text-sm transition-all ${
+                  (profile.contest_count ?? 0) === n
+                    ? 'border-yellow-500 bg-yellow-500 text-white'
+                    : 'border-slate-200 text-slate-600 hover:border-yellow-400'
+                }`}
+              >
+                {n}회
+              </button>
+            ))}
+            <button
+              onClick={() => saveContestCount(10)}
+              disabled={savingCount}
+              className={`py-2 rounded-xl border-2 font-semibold text-sm transition-all ${
+                (profile.contest_count ?? 0) >= 10
+                  ? 'border-yellow-500 bg-yellow-500 text-white'
+                  : 'border-slate-200 text-slate-600 hover:border-yellow-400'
+              }`}
+            >
+              10+회
+            </button>
           </div>
         </div>
       </div>

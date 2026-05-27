@@ -13,6 +13,16 @@ export async function POST(req: NextRequest) {
 
     const email = buildEmail(username)
 
+    // 학번 중복 확인 (동일 학번으로 가입 시도 차단)
+    const { data: existingStudentId } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('student_id', studentId)
+      .maybeSingle()
+    if (existingStudentId) {
+      return NextResponse.json({ error: '이미 가입한 학번입니다.' }, { status: 409 })
+    }
+
     // Create auth user (auto-confirm email)
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,

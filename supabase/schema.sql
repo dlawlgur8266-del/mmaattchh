@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS profiles (
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS contest_count INTEGER DEFAULT 0;
 -- 소속 학과 컬럼
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS department TEXT;
+-- 학번 중복 가입 방지 (유니크 인덱스)
+CREATE UNIQUE INDEX IF NOT EXISTS profiles_student_id_key ON profiles(student_id);
 
 DROP TRIGGER IF EXISTS update_profiles_updated_at ON profiles;
 CREATE TRIGGER update_profiles_updated_at
@@ -191,6 +193,31 @@ CREATE TABLE IF NOT EXISTS contest_chat_messages (
   content TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
+
+-- ── 13. external_contests (외부 공모전 자동 동기화) ──────
+CREATE TABLE IF NOT EXISTS external_contests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  url TEXT NOT NULL,
+  category TEXT,
+  organizer TEXT,
+  deadline DATE,
+  source TEXT NOT NULL,
+  description TEXT,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  UNIQUE(url)
+);
+
+DROP TRIGGER IF EXISTS trg_external_contests_updated_at ON external_contests;
+CREATE TRIGGER trg_external_contests_updated_at
+  BEFORE UPDATE ON external_contests
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- external_contests RLS (누구나 조회 가능, INSERT/UPDATE는 service_role만)
+ALTER TABLE external_contests ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "ext_contests_select" ON external_contests;
+CREATE POLICY "ext_contests_select" ON external_contests FOR SELECT TO authenticated USING (true);
 
 -- ── 인덱스 ─────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_matches_sport ON matches(sport);

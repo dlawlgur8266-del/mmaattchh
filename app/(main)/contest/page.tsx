@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Trophy, MapPin, Calendar, Clock, Users, ChevronRight, ExternalLink } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Trophy, MapPin, Calendar, Clock, Users, ChevronRight, ExternalLink, RefreshCw } from 'lucide-react'
 import {
   CONTESTS,
   CONTEST_CATEGORIES,
@@ -20,14 +20,40 @@ const REGION_META: Record<ContestRegion, { color: string; bg: string; emoji: str
   충청남도: { color: '#0F766E', bg: '#CCFBF1', emoji: '🌊' },
 }
 
+interface ExternalContest {
+  id: string
+  title: string
+  url: string
+  category: string | null
+  organizer: string | null
+  deadline: string | null
+  source: string
+  description: string | null
+  created_at: string
+}
+
 export default function ContestPage() {
   const router = useRouter()
   const [selectedRegion, setSelectedRegion] = useState<ContestRegion | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<ContestCategory>('전체')
 
+  // 외부 공모전 (DB에서 동기화된 데이터)
+  const [externalContests, setExternalContests] = useState<ExternalContest[]>([])
+  const [loadingExternal, setLoadingExternal] = useState(true)
+
   const filteredContests = selectedRegion
     ? getContestsByCategory(selectedRegion, selectedCategory)
     : []
+
+  useEffect(() => {
+    fetch('/api/external-contests')
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) setExternalContests(data)
+      })
+      .catch(() => {})
+      .finally(() => setLoadingExternal(false))
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -49,9 +75,137 @@ export default function ContestPage() {
         </button>
       </div>
 
-      {/* 지역 선택 */}
+      {/* ── 외부 공모전 (자동 동기화) ── */}
       <div>
-        <p className="text-sm font-semibold text-slate-600 mb-3">📍 지역 선택</p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-semibold text-slate-600 flex items-center gap-1.5">
+            <RefreshCw size={13} className="text-primary" />
+            자동 수집 공모전
+            {!loadingExternal && externalContests.length > 0 && (
+              <span className="ml-1 text-primary font-bold">{externalContests.length}개</span>
+            )}
+          </p>
+          <p className="text-xs text-slate-400">올콘 · 링커리어 자동 업데이트</p>
+        </div>
+
+        {loadingExternal ? (
+          <div className="flex items-center justify-center py-8 text-slate-400 text-sm gap-2">
+            <div className="w-4 h-4 border-2 border-slate-300 border-t-primary rounded-full animate-spin" />
+            공모전 불러오는 중...
+          </div>
+        ) : externalContests.length === 0 ? (
+          <div className="bg-slate-50 rounded-2xl p-6 text-center">
+            <Trophy size={32} className="mx-auto mb-2 text-slate-300" />
+            <p className="text-sm text-slate-500 font-medium">아직 수집된 외부 공모전이 없습니다</p>
+            <p className="text-xs text-slate-400 mt-1">매일 자정에 올콘·링커리어에서 자동으로 업데이트됩니다</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {externalContests.map((contest) => {
+              const daysLeft = contest.deadline
+                ? Math.ceil(
+                    (new Date(contest.deadline).getTime() - new Date().getTime()) /
+                      (1000 * 60 * 60 * 24)
+                  )
+                : null
+              const isExpired = daysLeft !== null && daysLeft < 0
+              const isUrgent = daysLeft !== null && daysLeft >= 0 && daysLeft <= 7
+
+              return (
+                <a
+                  key={contest.id}
+                  href={contest.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="card p-4 hover:shadow-md transition-shadow block"
+                >
+                  {/* 헤더 */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex flex-wrap gap-1.5">
+                      {contest.category && (
+                        <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">
+                          {contest.category}
+                        </span>
+                      )}
+                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">
+                        {contest.source === 'all-con' ? '올콘' : '링커리어'}
+                      </span>
+                    </div>
+                    {daysLeft !== null && (
+                      <span
+                        className={`text-xs font-bold whitespace-nowrap px-2.5 py-1 rounded-full ${
+                          isExpired
+                            ? 'bg-slate-100 text-slate-400'
+                            : isUrgent
+                            ? 'bg-red-100 text-red-600'
+                            : 'bg-green-100 text-green-700'
+                        }`}
+                      >
+                        {isExpired ? '마감' : `D-${daysLeft}`}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 공모전명 */}
+                  <h3 className="font-bold text-slate-800 mt-2 text-base leading-snug line-clamp-2">
+                    {contest.title}
+                  </h3>
+                  {contest.organizer && (
+                    <p className="text-sm text-slate-500 mt-0.5">{contest.organizer}</p>
+                  )}
+
+                  {/* 상세 정보 */}
+                  <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500">
+                    {contest.deadline && (
+                      <div className="flex items-center gap-1.5">
+                        <Calendar size={12} className="text-slate-400" />
+                        <span>마감: <strong className="text-slate-700">{contest.deadline}</strong></span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1 text-primary">
+                      <ExternalLink size={11} />
+                      <span>
+                        {contest.source === 'all-con'
+                          ? 'all-con.co.kr'
+                          : 'linkareer.com'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 설명 */}
+                  {contest.description && (
+                    <p className="text-xs text-slate-500 mt-2 line-clamp-2">{contest.description}</p>
+                  )}
+
+                  {/* 팀원 모집 버튼 */}
+                  {!isExpired && (
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault()
+                          router.push(
+                            `/contest/write?name=${encodeURIComponent(contest.title)}&deadline=${contest.deadline || ''}`
+                          )
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500 text-white text-xs font-semibold rounded-lg hover:bg-yellow-600 transition-colors"
+                      >
+                        <Users size={11} />
+                        팀원 모집
+                      </button>
+                    </div>
+                  )}
+                </a>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      <hr className="border-slate-100" />
+
+      {/* ── 지역별 공모전 (정적 데이터) ── */}
+      <div>
+        <p className="text-sm font-semibold text-slate-600 mb-3">📍 지역별 공모전</p>
         <div className="grid grid-cols-2 gap-3">
           {REGIONS.map((region) => {
             const meta = REGION_META[region]
@@ -164,7 +318,7 @@ export default function ContestPage() {
                               : 'bg-green-100 text-green-700'
                           }`}
                         >
-                          {isExpired ? '마감' : isUrgent ? `D-${daysLeft}` : `D-${daysLeft}`}
+                          {isExpired ? '마감' : `D-${daysLeft}`}
                         </span>
                       </div>
 
@@ -224,8 +378,8 @@ export default function ContestPage() {
 
       {/* 지역 미선택 시 안내 */}
       {!selectedRegion && (
-        <div className="text-center py-16 text-slate-400">
-          <Trophy size={48} className="mx-auto mb-4 text-yellow-400 opacity-70" />
+        <div className="text-center py-8 text-slate-400">
+          <Trophy size={40} className="mx-auto mb-3 text-yellow-400 opacity-70" />
           <p className="font-semibold text-slate-600">지역을 선택해주세요</p>
           <p className="text-sm mt-1">충청북도 또는 충청남도를 선택하면 공모전 목록이 표시됩니다</p>
         </div>
