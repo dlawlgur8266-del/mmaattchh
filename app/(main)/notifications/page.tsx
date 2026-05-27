@@ -25,14 +25,16 @@ export default function NotificationsPage() {
     supabase.auth.getUser().then(({ data: { user } }) => setUserId(user?.id || null))
   }, [])
 
-  const { notifications, markAsRead, markAllAsRead } = useNotifications(userId)
+  const { notifications, markAsRead, markAllAsRead, processedIds, markProcessed } =
+    useNotifications(userId)
 
   const handleAccept = async (relatedId: string | null, notifId: string) => {
     if (!relatedId) return
     const res = await fetch(`/api/applications/${relatedId}/accept`, { method: 'PATCH' })
     if (res.ok) {
-      toast.success('매치를 수락했습니다!')
+      toast.success('매치를 수락했습니다! 채팅방이 열렸어요.')
       markAsRead(notifId)
+      markProcessed(notifId)
     } else {
       const d = await res.json()
       toast.error(d.error || '처리 실패')
@@ -43,8 +45,9 @@ export default function NotificationsPage() {
     if (!relatedId) return
     const res = await fetch(`/api/applications/${relatedId}/reject`, { method: 'PATCH' })
     if (res.ok) {
-      toast.success('매치를 거절했습니다.')
+      toast.success('신청을 거절했습니다.')
       markAsRead(notifId)
+      markProcessed(notifId)
     } else {
       const d = await res.json()
       toast.error(d.error || '처리 실패')
@@ -58,10 +61,14 @@ export default function NotificationsPage() {
     }
   }
 
-  // Group by date
+  // 날짜별 그룹
   const grouped: Record<string, typeof notifications> = {}
   notifications.forEach((n) => {
-    const date = new Date(n.created_at).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
+    const date = new Date(n.created_at).toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
     if (!grouped[date]) grouped[date] = []
     grouped[date].push(n)
   })
@@ -83,61 +90,84 @@ export default function NotificationsPage() {
       </div>
 
       {notifications.length === 0 ? (
-        <EmptyState emoji="🔔" title="알림이 없습니다" description="매치 신청, 수락, 메시지 알림이 여기에 표시됩니다." />
+        <EmptyState
+          emoji="🔔"
+          title="알림이 없습니다"
+          description="매치 신청, 수락, 메시지 알림이 여기에 표시됩니다."
+        />
       ) : (
         <div className="space-y-6">
           {Object.entries(grouped).map(([date, items]) => (
             <div key={date}>
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">{date}</h3>
               <div className="card divide-y divide-slate-50">
-                {items.map((notif) => (
-                  <div
-                    key={notif.id}
-                    className={`p-4 cursor-pointer hover:bg-slate-50 transition-colors ${!notif.is_read ? 'bg-primary/5' : ''}`}
-                    onClick={() => handleClick(notif)}
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="text-xl flex-shrink-0 mt-0.5">{TYPE_ICON[notif.type] || '🔔'}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm leading-snug ${notif.is_read ? 'text-slate-600' : 'text-slate-800 font-medium'}`}>
-                          {notif.message}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-1">{formatDateTime(notif.created_at)}</p>
+                {items.map((notif) => {
+                  const isProcessed = processedIds.has(notif.id)
 
-                        {notif.type === 'match_apply' && notif.related_id && (
-                          <div className="flex gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              onClick={() => handleAccept(notif.related_id, notif.id)}
-                              className="px-3 py-1 bg-green-500 text-white text-xs rounded-lg font-medium hover:bg-green-600 transition-colors"
-                            >
-                              매치 수락
-                            </button>
-                            <button
-                              onClick={() => handleReject(notif.related_id, notif.id)}
-                              className="px-3 py-1 bg-red-500 text-white text-xs rounded-lg font-medium hover:bg-red-600 transition-colors"
-                            >
-                              매치 거절
-                            </button>
-                          </div>
-                        )}
+                  return (
+                    <div
+                      key={notif.id}
+                      className={`p-4 cursor-pointer hover:bg-slate-50 transition-colors ${
+                        !notif.is_read ? 'bg-primary/5' : ''
+                      }`}
+                      onClick={() => handleClick(notif)}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl flex-shrink-0 mt-0.5">
+                          {TYPE_ICON[notif.type] || '🔔'}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className={`text-sm leading-snug ${
+                              notif.is_read ? 'text-slate-600' : 'text-slate-800 font-medium'
+                            }`}
+                          >
+                            {notif.message}
+                          </p>
+                          <p className="text-xs text-slate-400 mt-1">{formatDateTime(notif.created_at)}</p>
 
-                        {notif.type === 'match_accept' && notif.related_id && (
-                          <div className="mt-2" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              onClick={() => router.push('/messages')}
-                              className="px-3 py-1 bg-primary text-white text-xs rounded-lg font-medium hover:bg-primary-600 transition-colors"
-                            >
-                              채팅 시작
-                            </button>
-                          </div>
+                          {/* match_apply: 수락/거절 버튼 (처리 전에만) */}
+                          {notif.type === 'match_apply' && notif.related_id && !isProcessed && (
+                            <div className="flex gap-2 mt-3" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                onClick={() => handleAccept(notif.related_id, notif.id)}
+                                className="px-4 py-1.5 bg-green-500 text-white text-xs rounded-lg font-semibold hover:bg-green-600 transition-colors"
+                              >
+                                신청 수락
+                              </button>
+                              <button
+                                onClick={() => handleReject(notif.related_id, notif.id)}
+                                className="px-4 py-1.5 bg-red-500 text-white text-xs rounded-lg font-semibold hover:bg-red-600 transition-colors"
+                              >
+                                신청 거절
+                              </button>
+                            </div>
+                          )}
+
+                          {/* match_apply: 처리 완료 */}
+                          {notif.type === 'match_apply' && isProcessed && (
+                            <p className="text-xs text-green-600 mt-2 font-medium">✓ 처리 완료</p>
+                          )}
+
+                          {/* match_accept: 채팅 시작 */}
+                          {notif.type === 'match_accept' && notif.related_id && (
+                            <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                onClick={() => router.push('/messages')}
+                                className="px-3 py-1.5 bg-primary text-white text-xs rounded-lg font-semibold hover:bg-primary/90 transition-colors"
+                              >
+                                채팅 시작
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {!notif.is_read && (
+                          <div className="w-2 h-2 bg-accent rounded-full flex-shrink-0 mt-2" />
                         )}
                       </div>
-                      {!notif.is_read && (
-                        <div className="w-2 h-2 bg-accent rounded-full flex-shrink-0 mt-2" />
-                      )}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           ))}

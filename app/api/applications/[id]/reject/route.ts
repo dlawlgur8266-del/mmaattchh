@@ -13,7 +13,7 @@ export async function PATCH(
 
   const { data: app } = await supabase
     .from('match_applications')
-    .select('id,match_id,applicant_id,status,match:matches!match_applications_match_id_fkey(author_id,team_name)')
+    .select('id,match_id,applicant_id,status,match:matches!match_applications_match_id_fkey(author_id,team_name,sport)')
     .eq('id', applicationId)
     .single()
 
@@ -29,11 +29,11 @@ export async function PATCH(
     .update({ status: 'rejected', updated_at: new Date().toISOString() })
     .eq('id', applicationId)
 
-  // Notify applicant
+  // 신청자에게 거절 알림 — "거절당했습니다" 문구
   await supabaseAdmin.from('notifications').insert({
     user_id: app.applicant_id,
     type: 'match_reject',
-    message: `${match.team_name} 매치 신청이 거절되었습니다.`,
+    message: `거절당했습니다 — ${match.team_name} (${match.sport}) 매치 신청이 거절되었습니다.`,
     related_id: app.match_id,
   })
 

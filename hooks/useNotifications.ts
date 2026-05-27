@@ -5,9 +5,13 @@ import { createClient } from '@/lib/supabase/client'
 import type { Notification } from '@/types/database'
 import toast from 'react-hot-toast'
 
-export function useNotifications(userId: string | null) {
+export function useNotifications(
+  userId: string | null,
+  onMatchApply?: (notif: Notification) => void
+) {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
+  const [processedIds, setProcessedIds] = useState<Set<string>>(new Set())
   const supabase = createClient()
 
   const fetchNotifications = useCallback(async () => {
@@ -37,7 +41,22 @@ export function useNotifications(userId: string | null) {
           const newNotif = payload.new as Notification
           setNotifications((prev) => [newNotif, ...prev])
           setUnreadCount((prev) => prev + 1)
-          toast(newNotif.message, { icon: '🔔' })
+
+          if (newNotif.type === 'match_apply' && onMatchApply) {
+            // match_apply는 커스텀 토스트(수락/거절 버튼 포함)로 처리
+            onMatchApply(newNotif)
+          } else {
+            // 그 외 알림은 일반 토스트
+            const icons: Record<string, string> = {
+              match_accept: '✅',
+              match_reject: '❌',
+              new_message: '💬',
+            }
+            toast(newNotif.message, {
+              icon: icons[newNotif.type] || '🔔',
+              duration: 5000,
+            })
+          }
         }
       )
       .subscribe()
@@ -45,20 +64,32 @@ export function useNotifications(userId: string | null) {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [userId, fetchNotifications, supabase])
+  }, [userId, fetchNotifications, supabase, onMatchApply])
 
-  const markAsRead = async (id: string) => {
+  const markAsRead = useCallback(async (id: string) => {
     await supabase.from('notifications').update({ is_read: true }).eq('id', id)
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)))
     setUnreadCount((prev) => Math.max(0, prev - 1))
-  }
+  }, [supabase])
 
-  const markAllAsRead = async () => {
+  const markAllAsRead = useCallback(async () => {
     if (!userId) return
     await supabase.from('notifications').update({ is_read: true }).eq('user_id', userId).eq('is_read', false)
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
     setUnreadCount(0)
-  }
+  }, [userId, supabase])
 
-  return { notifications, unreadCount, markAsRead, markAllAsRead, refetch: fetchNotifications }
+  const markProcessed = useCallback((notifId: string) => {
+    setProcessedIds((prev) => new Set([...prev, notifId]))
+  }, [])
+
+  return {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    refetch: fetchNotifications,
+    processedIds,
+    markProcessed,
+  }
 }
