@@ -339,12 +339,23 @@ CREATE POLICY "contest_msgs_insert" ON contest_chat_messages FOR INSERT TO authe
     room_id IN (SELECT room_id FROM contest_chat_members WHERE user_id = auth.uid())
   );
 
--- ── Realtime 활성화 ──────────────────────────────
-ALTER PUBLICATION supabase_realtime ADD TABLE matches;
-ALTER PUBLICATION supabase_realtime ADD TABLE match_applications;
-ALTER PUBLICATION supabase_realtime ADD TABLE messages;
-ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
-ALTER PUBLICATION supabase_realtime ADD TABLE contest_matches;
-ALTER PUBLICATION supabase_realtime ADD TABLE contest_applications;
-ALTER PUBLICATION supabase_realtime ADD TABLE contest_chat_messages;
-ALTER PUBLICATION supabase_realtime ADD TABLE contest_chat_members;
+-- ── Realtime 활성화 (이미 등록된 테이블은 건너뜀) ──
+DO $$
+DECLARE
+  t TEXT;
+  tables TEXT[] := ARRAY[
+    'matches','match_applications','messages','notifications',
+    'contest_matches','contest_applications',
+    'contest_chat_messages','contest_chat_members'
+  ];
+BEGIN
+  FOREACH t IN ARRAY tables LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_publication_tables
+      WHERE pubname = 'supabase_realtime' AND tablename = t
+    ) THEN
+      EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE %I', t);
+    END IF;
+  END LOOP;
+END
+$$;
