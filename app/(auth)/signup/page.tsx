@@ -57,8 +57,8 @@ export default function SignupPage() {
     if (form.nickname.length < 2 || form.nickname.length > 10) {
       newErrors.nickname = '2~10자로 입력해주세요.'
     }
-    if (!/^\d{8}$/.test(form.studentId)) {
-      newErrors.studentId = '학번은 8자리 숫자여야 합니다. (예: 20241234)'
+    if (!/^\d{10}$/.test(form.studentId)) {
+      newErrors.studentId = '학번은 10자리 숫자여야 합니다. (예: 2024123456)'
     }
     return newErrors
   }
@@ -94,7 +94,7 @@ export default function SignupPage() {
     form.password === form.passwordConfirm &&
     form.fullName.length >= 2 &&
     form.nickname.length >= 2 &&
-    form.studentId.length === 8
+    form.studentId.length === 10
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -270,15 +270,15 @@ export default function SignupPage() {
             type="text"
             inputMode="numeric"
             className="input-field"
-            placeholder="8자리 학번 (예: 20241234)"
+            placeholder="10자리 학번 (예: 2024123456)"
             value={form.studentId}
             onChange={(e) => {
-              const val = e.target.value.replace(/\D/g, '').slice(0, 8)
+              const val = e.target.value.replace(/\D/g, '').slice(0, 10)
               handleChange('studentId', val)
             }}
           />
           {errors.studentId && <p className="text-red-500 text-xs mt-1">{errors.studentId}</p>}
-          {form.studentId.length === 8 && !errors.studentId && (
+          {form.studentId.length === 10 && !errors.studentId && (
             <p className="text-green-500 text-xs mt-1">✓ 올바른 형식의 학번입니다.</p>
           )}
         </div>

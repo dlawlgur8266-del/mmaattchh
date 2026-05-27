@@ -31,8 +31,8 @@ export function formatDateTime(dateStr: string): string {
 }
 
 export function maskStudentId(studentId: string): string {
-  if (studentId.length !== 8) return studentId
-  return studentId.substring(0, 4) + '****'
+  if (studentId.length < 6) return studentId
+  return studentId.substring(0, 6) + '****'
 }
 
 export function buildEmail(username: string): string {
