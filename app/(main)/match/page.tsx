@@ -25,9 +25,12 @@ export default function MatchPage() {
     const { data: { user } } = await supabase.auth.getUser()
     setCurrentUserId(user?.id || null)
 
+    // ── '모집중' 상태만 표시 ──
+    // 매치 확정(매치확정) 게시물은 목록에서 제외하여 내 정보에만 남게 함
     let query = supabase
       .from('matches')
       .select('*, author:profiles!matches_author_id_fkey(id,nickname,skill_level)')
+      .eq('status', '모집중')   // ← 핵심 필터
       .order('created_at', { ascending: false })
 
     if (sport !== 'all') query = query.eq('sport', sport)
@@ -50,7 +53,8 @@ export default function MatchPage() {
     fetchData()
   }, [fetchData])
 
-  // Realtime subscription
+  // 실시간 구독 — 매치 상태 변경 시 목록 자동 갱신
+  // (확정 → 목록에서 사라짐 / 취소 → 모집중으로 복원되어 자동 재등록)
   useEffect(() => {
     const channel = supabase
       .channel('matches-list')
@@ -93,7 +97,7 @@ export default function MatchPage() {
         <EmptyState
           emoji="🏟️"
           title="매치가 없습니다"
-          description="아직 등록된 매치가 없어요. 첫 번째로 매치글을 작성해보세요!"
+          description="아직 모집 중인 매치가 없어요. 첫 번째로 매치글을 작성해보세요!"
           action={
             <button
               onClick={() => router.push('/match/write')}
@@ -112,6 +116,8 @@ export default function MatchPage() {
               currentUserId={currentUserId}
               alreadyApplied={appliedIds.has(match.id)}
               onApplied={() => setAppliedIds((prev) => new Set([...prev, match.id]))}
+              // 매치 확정 시 목록에서 즉시 제거 (내 정보에만 남음)
+              onConfirmed={(id) => setMatches((prev) => prev.filter((m) => m.id !== id))}
             />
           ))}
         </div>

@@ -14,6 +14,8 @@ interface MatchCardProps {
   currentUserId: string | null
   alreadyApplied?: boolean
   onApplied?: () => void
+  /** 매치가 확정되었을 때 부모에서 카드를 즉시 제거하기 위한 콜백 */
+  onConfirmed?: (matchId: string) => void
 }
 
 function formatMatchDatetime(dt: string | null | undefined): string | null {
@@ -28,7 +30,13 @@ function formatMatchDatetime(dt: string | null | undefined): string | null {
   })
 }
 
-export function MatchCard({ match, currentUserId, alreadyApplied = false, onApplied }: MatchCardProps) {
+export function MatchCard({
+  match,
+  currentUserId,
+  alreadyApplied = false,
+  onApplied,
+  onConfirmed,
+}: MatchCardProps) {
   const [applied, setApplied] = useState(alreadyApplied)
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<MatchStatus>(match.status)
@@ -56,6 +64,15 @@ export function MatchCard({ match, currentUserId, alreadyApplied = false, onAppl
     } finally {
       setLoading(false)
     }
+  }
+
+  // 매치 수락(확정) 시: 상태 업데이트 + 부모에 알려 목록에서 즉시 제거
+  const handleAccepted = () => {
+    setStatus('매치확정')
+    // 짧은 딜레이 후 부모에서 카드 제거 (toast를 잠깐 보여주기 위해)
+    setTimeout(() => {
+      onConfirmed?.(match.id)
+    }, 1200)
   }
 
   return (
@@ -113,10 +130,8 @@ export function MatchCard({ match, currentUserId, alreadyApplied = false, onAppl
             {status === '모집중' ? (
               <PendingApplications
                 matchId={match.id}
-                onAccepted={() => setStatus('매치확정')}
+                onAccepted={handleAccepted}
               />
-            ) : status === '취소됨' ? (
-              <p className="text-xs text-center text-red-400 py-2">취소된 매치입니다</p>
             ) : (
               <p className="text-xs text-center text-slate-400 py-2">매치가 확정되었습니다</p>
             )}
@@ -124,10 +139,6 @@ export function MatchCard({ match, currentUserId, alreadyApplied = false, onAppl
         ) : status === '매치확정' ? (
           <button disabled className="w-full py-2.5 rounded-xl text-sm font-medium bg-slate-100 text-slate-400 cursor-not-allowed">
             매치 확정됨
-          </button>
-        ) : status === '취소됨' ? (
-          <button disabled className="w-full py-2.5 rounded-xl text-sm font-medium bg-red-50 text-red-400 cursor-not-allowed">
-            취소된 매치
           </button>
         ) : applied ? (
           <button disabled className="w-full py-2.5 rounded-xl text-sm font-medium bg-green-100 text-green-700 cursor-not-allowed flex items-center justify-center gap-1.5">
