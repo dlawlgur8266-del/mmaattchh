@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   username TEXT UNIQUE NOT NULL,
   nickname TEXT UNIQUE NOT NULL,
   full_name TEXT NOT NULL,
-  student_id CHAR(8) NOT NULL,
+  student_id CHAR(10) NOT NULL,
   skill_level TEXT NOT NULL DEFAULT '초급',
   created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT now() NOT NULL,
