@@ -9,12 +9,14 @@ export function useChat(roomId: string | null, userId: string | null) {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  // 싱글턴이므로 안정된 참조 — deps에 넣어도 무한루프 없음
   const supabase = createClient()
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
   }, [])
 
+  // ─── 메시지 초기 로드 ───────────────────────────────────────
   useEffect(() => {
     if (!roomId) return
     setLoading(true)
@@ -39,8 +41,12 @@ export function useChat(roomId: string | null, userId: string | null) {
         .neq('sender_id', userId)
         .then(() => {})
     }
+  }, [roomId, userId]) // supabase 싱글턴이므로 제거 가능, scrollToBottom은 stable
 
-    // 실시간 구독 — 상대방이 보낸 새 메시지 수신 (중복 방지)
+  // ─── Realtime 구독 (채널 안정화) ────────────────────────────
+  useEffect(() => {
+    if (!roomId) return
+
     const channel = supabase
       .channel(`chat:${roomId}`)
       .on(
@@ -49,11 +55,10 @@ export function useChat(roomId: string | null, userId: string | null) {
         async (payload) => {
           const msg = payload.new as Message
 
-          // 내가 보낸 메시지는 낙관적 업데이트가 이미 처리 → ID 기준 중복 방지
           setMessages((prev) => {
             if (prev.some((m) => m.id === msg.id)) return prev
 
-            // temp 메시지를 실제 메시지로 교체 (sender_id, content 일치 여부로 판단)
+            // temp 메시지를 실제 메시지로 교체
             const tempIdx = prev.findIndex(
               (m) =>
                 m.id.startsWith('temp-') &&
@@ -86,29 +91,49 @@ export function useChat(roomId: string | null, userId: string | null) {
             )
             scrollToBottom()
 
-            // 읽음 처리
             supabase.from('messages').update({ is_read: true }).eq('id', msg.id).then(() => {})
           }
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        // CHANNEL_ERROR 시 3초 후 새 메시지를 polling으로 보완
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn(`[useChat] Realtime status: ${status} — polling fallback active`)
+        }
+      })
+
+    // ── 폴링 폴백: Realtime이 불안정할 때 3초마다 최신 메시지 확인 ──
+    let lastId = ''
+    const poll = setInterval(async () => {
+      const { data } = await supabase
+        .from('messages')
+        .select('*, sender:profiles!messages_sender_id_fkey(id,nickname,username)')
+        .eq('room_id', roomId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (data && data.id !== lastId) {
+        lastId = data.id
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === data.id)) return prev
+          return [...prev, data]
+        })
+        scrollToBottom()
+      }
+    }, 3000)
 
     return () => {
       supabase.removeChannel(channel)
+      clearInterval(poll)
     }
-  }, [roomId, userId, supabase, scrollToBottom])
+  }, [roomId, userId]) // 싱글턴 supabase, stable scrollToBottom은 의존성 불필요
 
-  /**
-   * 메시지 전송
-   * - 낙관적 업데이트: 전송 즉시 화면에 표시
-   * - API 라우트로 전송 (supabaseAdmin → RLS 우회 + 알림 포함)
-   * - 전송 실패 시 임시 메시지 제거 + false 반환
-   */
+  // ─── 메시지 전송 ────────────────────────────────────────────
   const sendMessage = async (content: string): Promise<boolean> => {
     if (!roomId || !userId || !content.trim() || sending) return false
     setSending(true)
 
-    // 1️⃣ 낙관적 업데이트: 임시 ID로 즉시 표시
     const tempId = `temp-${Date.now()}`
     const optimisticMsg: Message = {
       id: tempId,
@@ -129,17 +154,14 @@ export function useChat(roomId: string | null, userId: string | null) {
       })
 
       if (!res.ok) {
-        // 전송 실패 → 임시 메시지 제거
         setMessages((prev) => prev.filter((m) => m.id !== tempId))
         const err = await res.json()
         console.error('메시지 전송 실패:', err.error)
         return false
       }
 
-      // 2️⃣ 서버 응답(실제 메시지)으로 임시 메시지 교체
       const realMsg: Message = await res.json()
       setMessages((prev) => {
-        // 혹시 Realtime이 이미 실제 ID를 추가했으면 temp만 제거
         const withoutTemp = prev.filter((m) => m.id !== tempId)
         if (withoutTemp.some((m) => m.id === realMsg.id)) return withoutTemp
         return [...withoutTemp, realMsg]
@@ -147,7 +169,6 @@ export function useChat(roomId: string | null, userId: string | null) {
       scrollToBottom()
       return true
     } catch (err) {
-      // 네트워크 오류 → 임시 메시지 제거
       setMessages((prev) => prev.filter((m) => m.id !== tempId))
       console.error('메시지 전송 오류:', err)
       return false

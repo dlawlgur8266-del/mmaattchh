@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, use } from 'react'
+import { useState, useEffect, useRef, use, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Send, Users, Trophy } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -24,6 +24,7 @@ interface Member {
 export default function ContestChatPage({ params }: { params: Promise<{ roomId: string }> }) {
   const { roomId } = use(params)
   const router = useRouter()
+  // 싱글턴 클라이언트
   const supabase = createClient()
 
   const [userId, setUserId] = useState<string | null>(null)
@@ -35,29 +36,34 @@ export default function ContestChatPage({ params }: { params: Promise<{ roomId: 
   const [sending, setSending] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const userIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => setUserId(user?.id || null))
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUserId(user?.id || null)
+      userIdRef.current = user?.id || null
+    })
   }, [])
+
+  // ─── 초기 데이터 로드 ───────────────────────────────────────
+  const loadMessages = useCallback(async () => {
+    const res = await fetch(`/api/contest-rooms/${roomId}/messages`)
+    if (res.ok) {
+      const msgs = await res.json()
+      setMessages(msgs)
+    }
+  }, [roomId])
 
   useEffect(() => {
     if (!roomId) return
 
-    // 방 정보 & 메시지 로드
     async function load() {
-      const [roomRes, msgRes, memberRes] = await Promise.all([
-        fetch(`/api/contest-rooms`),
-        fetch(`/api/contest-rooms/${roomId}/messages`),
-        supabase
-          .from('contest_chat_members')
-          .select('user_id, user:profiles!contest_chat_members_user_id_fkey(nickname)')
-          .eq('room_id', roomId),
-      ])
+      await loadMessages()
 
-      if (msgRes.ok) {
-        const msgs = await msgRes.json()
-        setMessages(msgs)
-      }
+      const memberRes = await supabase
+        .from('contest_chat_members')
+        .select('user_id, user:profiles!contest_chat_members_user_id_fkey(nickname)')
+        .eq('room_id', roomId)
 
       if (memberRes.data) {
         setMembers(
@@ -68,7 +74,6 @@ export default function ContestChatPage({ params }: { params: Promise<{ roomId: 
         )
       }
 
-      // 방 이름 가져오기
       const { data: room } = await supabase
         .from('contest_chat_rooms')
         .select('name, contest_match:contest_matches!contest_chat_rooms_contest_match_id_fkey(contest_name)')
@@ -84,10 +89,12 @@ export default function ContestChatPage({ params }: { params: Promise<{ roomId: 
     }
 
     load()
-  }, [roomId, supabase])
+  }, [roomId]) // supabase 싱글턴이므로 제거 가능
 
-  // 실시간 메시지 구독
+  // ─── Realtime 구독 + 폴링 폴백 ─────────────────────────────
   useEffect(() => {
+    if (!roomId) return
+
     const channel = supabase
       .channel(`contest-chat:${roomId}`)
       .on('postgres_changes', {
@@ -97,7 +104,6 @@ export default function ContestChatPage({ params }: { params: Promise<{ roomId: 
         filter: `room_id=eq.${roomId}`,
       }, async (payload) => {
         const msg = payload.new as Message
-        // 발신자 닉네임 조회
         const { data: sender } = await supabase
           .from('profiles')
           .select('id, nickname')
@@ -108,10 +114,34 @@ export default function ContestChatPage({ params }: { params: Promise<{ roomId: 
           return [...prev, { ...msg, sender: sender || undefined }]
         })
       })
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn(`[ContestChat] Realtime ${status}`)
+        }
+      })
 
-    return () => { supabase.removeChannel(channel) }
-  }, [roomId, supabase])
+    // 폴링 폴백: 3초마다 최신 메시지 1건 확인
+    let lastId = ''
+    const poll = setInterval(async () => {
+      const res = await fetch(`/api/contest-rooms/${roomId}/messages`)
+      if (!res.ok) return
+      const msgs: Message[] = await res.json()
+      if (!msgs.length) return
+      const latest = msgs[msgs.length - 1]
+      if (latest.id !== lastId) {
+        lastId = latest.id
+        setMessages((prev) => {
+          const missing = msgs.filter((m) => !prev.some((p) => p.id === m.id))
+          return missing.length > 0 ? [...prev, ...missing] : prev
+        })
+      }
+    }, 3000)
+
+    return () => {
+      supabase.removeChannel(channel)
+      clearInterval(poll)
+    }
+  }, [roomId])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })

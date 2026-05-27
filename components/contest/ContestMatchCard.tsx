@@ -38,6 +38,8 @@ export function ContestMatchCard({ match, currentUserId, onDeleted }: Props) {
   const categoryColors = CATEGORY_COLORS[match.contest_category as keyof typeof CATEGORY_COLORS] ||
     { color: '#475569', bg: '#F1F5F9' }
 
+  // ── supabase 싱글턴: const 변수 재선언 불필요, 상위에서 한 번만 ──
+
   // 이미 신청했는지 확인
   const checkApplied = useCallback(async () => {
     if (!currentUserId || isOwn) return
@@ -76,17 +78,27 @@ export function ContestMatchCard({ match, currentUserId, onDeleted }: Props) {
     if (isOwn) {
       const channel = supabase
         .channel(`contest-apps:${match.id}`)
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'contest_applications', filter: `contest_match_id=eq.${match.id}` }, () => {
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'contest_applications',
+          filter: `contest_match_id=eq.${match.id}`,
+        }, () => {
           fetchApplications()
         })
-        .subscribe()
-      const polling = setInterval(fetchApplications, 30000)
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn(`[ContestMatchCard] Realtime ${status}`)
+          }
+        })
+      // 싱글턴 덕분에 deps에서 supabase 제거 가능 — 10초 폴링
+      const polling = setInterval(fetchApplications, 10000)
       return () => {
         supabase.removeChannel(channel)
         clearInterval(polling)
       }
     }
-  }, [isOwn, checkApplied, fetchApplications, match.id, supabase])
+  }, [isOwn, checkApplied, fetchApplications, match.id])
 
   const handleApply = async () => {
     if (!currentUserId) return toast.error('로그인이 필요합니다.')

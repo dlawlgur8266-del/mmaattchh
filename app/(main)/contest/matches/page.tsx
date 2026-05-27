@@ -16,6 +16,7 @@ export default function ContestMatchesPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // 싱글턴 클라이언트
   const supabase = createClient()
 
   const fetchData = useCallback(async () => {
@@ -30,7 +31,7 @@ export default function ContestMatchesPage() {
 
     setMatches(data || [])
     setLoading(false)
-  }, [supabase])
+  }, []) // supabase 싱글턴이므로 deps 불필요
 
   useEffect(() => {
     fetchData()
@@ -42,9 +43,18 @@ export default function ContestMatchesPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'contest_matches' }, () => {
         fetchData()
       })
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [supabase, fetchData])
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[ContestMatches] Realtime', status)
+        }
+      })
+    // 폴링 폴백: 10초마다 목록 갱신
+    const poll = setInterval(fetchData, 10000)
+    return () => {
+      supabase.removeChannel(channel)
+      clearInterval(poll)
+    }
+  }, [fetchData])
 
   if (loading) return <PageSpinner />
 
