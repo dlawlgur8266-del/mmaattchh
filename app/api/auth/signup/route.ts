@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: authError.message }, { status: 400 })
     }
 
-    // Create profile
+    // Create profile (contest_count 컬럼이 아직 캐시에 없을 경우를 대비해 2단계로 처리)
     const { error: profileError } = await supabaseAdmin.from('profiles').insert({
       id: authData.user.id,
       username,
@@ -35,8 +35,15 @@ export async function POST(req: NextRequest) {
       full_name: fullName,
       student_id: studentId,
       skill_level: skillLevel || '초급',
-      contest_count: typeof contestCount === 'number' ? Math.min(Math.max(contestCount, 0), 10) : 0,
     })
+
+    if (!profileError && typeof contestCount === 'number' && contestCount >= 0) {
+      // contest_count는 별도 UPDATE — 컬럼 캐시 누락 시 회원가입 자체가 실패하지 않도록 분리
+      await supabaseAdmin
+        .from('profiles')
+        .update({ contest_count: Math.min(Math.max(contestCount, 0), 10) })
+        .eq('id', authData.user.id)
+    }
 
     if (profileError) {
       // Rollback auth user
