@@ -3,7 +3,18 @@ export type Sport = '축구' | '풋살' | '농구' | 'e스포츠'
 export type MatchSize = '1vs1' | '3vs3' | '5vs5' | '11vs11'
 export type MatchStatus = '모집중' | '매치확정' | '취소됨'
 export type ApplicationStatus = 'pending' | 'accepted' | 'rejected'
-export type NotificationType = 'match_apply' | 'match_accept' | 'match_reject' | 'new_message' | 'match_cancel'
+export type NotificationType =
+  | 'match_apply'
+  | 'match_accept'
+  | 'match_reject'
+  | 'new_message'
+  | 'match_cancel'
+  | 'contest_apply'
+  | 'contest_accept'
+  | 'contest_reject'
+  | 'contest_message'
+
+export type ContestMatchStatus = '모집중' | '마감'
 
 export interface Profile {
   id: string
@@ -11,7 +22,8 @@ export interface Profile {
   nickname: string
   full_name: string
   student_id: string
-  skill_level: SkillLevel
+  skill_level: SkillLevel          // 스포츠 실력 (초급/중급/고수)
+  contest_count?: number           // 공모전 출전 횟수 (0~10)
   created_at: string
   updated_at: string
 }
@@ -97,7 +109,7 @@ export interface Notification {
 export interface MyMatch {
   matchId: string
   applicationId: string
-  teamName: string       // 내 팀명(작성자) 또는 상대팀명
+  teamName: string
   opponentNickname: string
   sport: Sport
   matchSize: MatchSize
@@ -107,7 +119,59 @@ export interface MyMatch {
   isAuthor: boolean
 }
 
-// Sport metadata
+// ─── 공모전 관련 타입 ───────────────────────────────────────────────────────
+
+export interface ContestMatch {
+  id: string
+  author_id: string
+  contest_name: string
+  contest_category: string
+  region: string
+  deadline: string          // YYYY-MM-DD
+  team_size: number         // 모집 인원 (1~5)
+  current_count: number     // 현재 수락된 인원
+  description: string
+  status: ContestMatchStatus
+  created_at: string
+  updated_at: string
+  // Joined fields
+  author?: Profile
+}
+
+export interface ContestApplication {
+  id: string
+  contest_match_id: string
+  applicant_id: string
+  status: ApplicationStatus
+  created_at: string
+  updated_at: string
+  // Joined fields
+  applicant?: Profile
+  contest_match?: ContestMatch
+}
+
+export interface ContestChatRoom {
+  id: string
+  contest_match_id: string
+  name: string | null
+  created_at: string
+  // Joined fields
+  contest_match?: ContestMatch
+  members?: Profile[]
+}
+
+export interface ContestChatMessage {
+  id: string
+  room_id: string
+  sender_id: string
+  content: string
+  created_at: string
+  // Joined fields
+  sender?: Profile
+}
+
+// ─── Sport metadata ────────────────────────────────────────────────────────
+
 export const SPORT_META: Record<Sport, { emoji: string; color: string; bgColor: string }> = {
   '축구': { emoji: '⚽', color: '#16A34A', bgColor: '#DCFCE7' },
   '풋살': { emoji: '🥅', color: '#2563EB', bgColor: '#DBEAFE' },

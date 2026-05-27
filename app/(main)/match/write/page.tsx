@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { PenSquare, MapPin, Calendar, Clock } from 'lucide-react'
+import { PenSquare, MapPin, Calendar, Clock, Trophy, Swords } from 'lucide-react'
 import { SPORT_META, SPORT_ALLOWED_SIZES } from '@/types/database'
 import type { Sport, SkillLevel, MatchSize } from '@/types/database'
 import toast from 'react-hot-toast'
@@ -11,8 +11,11 @@ const sports: Sport[] = ['축구', '풋살', '농구', 'e스포츠']
 const allSizes: MatchSize[] = ['1vs1', '3vs3', '5vs5', '11vs11']
 const levels: SkillLevel[] = ['초급', '중급', '고수']
 
+type WriteMode = '스포츠' | '공모전'
+
 export default function WriteMatchPage() {
   const router = useRouter()
+  const [mode, setMode] = useState<WriteMode>('스포츠')
   const [form, setForm] = useState({
     teamName: '',
     sport: '' as Sport | '',
@@ -20,14 +23,12 @@ export default function WriteMatchPage() {
     location: '',
     description: '',
     requiredLevel: '중급' as SkillLevel,
-    matchDate: '',   // YYYY-MM-DD
-    matchTime: '',   // HH:mm
+    matchDate: '',
+    matchTime: '',
   })
   const [loading, setLoading] = useState(false)
 
   const allowedSizes = form.sport ? SPORT_ALLOWED_SIZES[form.sport as Sport] : allSizes
-
-  // 오늘 날짜 (min 값)
   const today = new Date().toISOString().split('T')[0]
 
   const handleSportChange = (s: Sport) => {
@@ -41,36 +42,14 @@ export default function WriteMatchPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.teamName.trim()) {
-      toast.error('팀명을 입력해주세요.')
-      return
-    }
-    if (!form.sport) {
-      toast.error('종목을 선택해주세요.')
-      return
-    }
-    if (!form.matchSize) {
-      toast.error('매치 인원을 선택해주세요.')
-      return
-    }
-    if (!form.location.trim()) {
-      toast.error('장소를 입력해주세요.')
-      return
-    }
-    if (form.description.trim().length < 10) {
-      toast.error('소개글을 10자 이상 입력해주세요.')
-      return
-    }
-    if (!form.matchDate) {
-      toast.error('경기 날짜를 선택해주세요.')
-      return
-    }
-    if (!form.matchTime) {
-      toast.error('경기 시간을 선택해주세요.')
-      return
-    }
+    if (!form.teamName.trim()) return toast.error('팀명을 입력해주세요.')
+    if (!form.sport) return toast.error('종목을 선택해주세요.')
+    if (!form.matchSize) return toast.error('매치 인원을 선택해주세요.')
+    if (!form.location.trim()) return toast.error('장소를 입력해주세요.')
+    if (form.description.trim().length < 10) return toast.error('소개글을 10자 이상 입력해주세요.')
+    if (!form.matchDate) return toast.error('경기 날짜를 선택해주세요.')
+    if (!form.matchTime) return toast.error('경기 시간을 선택해주세요.')
 
-    // 날짜+시간 → ISO 문자열
     const matchDatetime = new Date(`${form.matchDate}T${form.matchTime}:00`).toISOString()
 
     setLoading(true)
@@ -89,10 +68,7 @@ export default function WriteMatchPage() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) {
-        toast.error(data.error || '작성에 실패했습니다.')
-        return
-      }
+      if (!res.ok) return toast.error(data.error || '작성에 실패했습니다.')
       toast.success('매치글이 등록되었습니다!')
       router.push('/match')
     } finally {
@@ -104,10 +80,42 @@ export default function WriteMatchPage() {
     <div className="max-w-xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-800">매치글 작성</h1>
-        <p className="text-slate-500 text-sm mt-0.5">상대팀을 모집하는 글을 작성하세요</p>
+        <p className="text-slate-500 text-sm mt-0.5">스포츠 매치 또는 공모전 팀원을 모집하세요</p>
       </div>
 
+      {/* 모드 선택 */}
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        <button
+          type="button"
+          onClick={() => setMode('스포츠')}
+          className={`flex items-center justify-center gap-2 p-4 rounded-2xl border-2 transition-all font-semibold ${
+            mode === '스포츠'
+              ? 'border-primary bg-primary/5 text-primary shadow-sm'
+              : 'border-slate-200 text-slate-500 hover:border-slate-300'
+          }`}
+        >
+          <Swords size={20} />
+          스포츠 매치
+        </button>
+        <button
+          type="button"
+          onClick={() => router.push('/contest/write')}
+          className="flex items-center justify-center gap-2 p-4 rounded-2xl border-2 transition-all font-semibold border-slate-200 text-slate-500 hover:border-yellow-400 hover:text-yellow-600"
+        >
+          <Trophy size={20} />
+          공모전 팀원
+        </button>
+      </div>
+
+      {mode === '공모전' && null}
+
+      {/* 스포츠 매치 폼 */}
       <form onSubmit={handleSubmit} className="card p-6 space-y-6">
+        <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+          <Swords size={18} className="text-primary" />
+          <span className="font-semibold text-slate-700">스포츠 매치 작성</span>
+        </div>
+
         {/* 팀명 */}
         <div>
           <label className="block text-sm font-semibold text-slate-700 mb-2">팀명</label>
@@ -248,7 +256,9 @@ export default function WriteMatchPage() {
         <div>
           <label className="block text-sm font-semibold text-slate-700 mb-2">
             소개글
-            <span className="ml-2 text-xs font-normal text-slate-400">{form.description.length}/500</span>
+            <span className="ml-2 text-xs font-normal text-slate-400">
+              {form.description.length}/500
+            </span>
           </label>
           <textarea
             className="input-field resize-none"
@@ -289,7 +299,9 @@ export default function WriteMatchPage() {
           {loading ? (
             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
           ) : (
-            <><PenSquare size={18} /> 매치글 등록하기</>
+            <>
+              <PenSquare size={18} /> 매치글 등록하기
+            </>
           )}
         </button>
       </form>

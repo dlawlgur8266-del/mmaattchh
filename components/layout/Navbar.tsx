@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Trophy, PenSquare, Star, User, MessageCircle } from 'lucide-react'
+import { Trophy, PenSquare, Star, User, MessageCircle, Swords } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
-  { href: '/match', label: '매치', icon: Trophy },
+  { href: '/match', label: '매치', icon: Swords },
+  { href: '/contest', label: '공모전', icon: Trophy },
   { href: '/match/write', label: '매치글 작성', icon: PenSquare },
   { href: '/review', label: '팀 후기', icon: Star },
   { href: '/messages', label: '메시지', icon: MessageCircle },
@@ -21,7 +22,10 @@ export function Navbar() {
       {/* Desktop sidebar */}
       <nav className="hidden md:flex flex-col gap-1 w-52 flex-shrink-0">
         {navItems.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || (href !== '/match' && pathname.startsWith(href))
+          const active =
+            pathname === href ||
+            (href !== '/match' && href !== '/contest' && pathname.startsWith(href)) ||
+            (href === '/contest' && pathname.startsWith('/contest'))
           return (
             <Link
               key={href}
@@ -41,21 +45,24 @@ export function Navbar() {
       </nav>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-100 px-2 pb-safe">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-100 px-1 pb-safe">
         <div className="flex justify-around">
           {navItems.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || (href !== '/match' && pathname.startsWith(href))
+            const active =
+              pathname === href ||
+              (href !== '/match' && href !== '/contest' && pathname.startsWith(href)) ||
+              (href === '/contest' && pathname.startsWith('/contest'))
             return (
               <Link
                 key={href}
                 href={href}
                 className={cn(
-                  'flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-colors',
+                  'flex flex-col items-center gap-0.5 py-2 px-2 rounded-xl transition-colors',
                   active ? 'text-primary' : 'text-slate-400'
                 )}
               >
-                <Icon size={22} />
-                <span className="text-[10px] font-medium">{label}</span>
+                <Icon size={20} />
+                <span className="text-[9px] font-medium">{label}</span>
               </Link>
             )
           })}

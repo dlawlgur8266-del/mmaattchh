@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Eye, EyeOff, UserPlus, CheckCircle, XCircle } from 'lucide-react'
+import { Eye, EyeOff, UserPlus, CheckCircle, XCircle, Trophy, Swords } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { SkillLevel } from '@/types/database'
 
@@ -14,13 +14,16 @@ interface FormState {
   fullName: string
   nickname: string
   studentId: string
-  skillLevel: SkillLevel
+  skillLevel: SkillLevel     // 스포츠 실력
+  contestCount: number       // 공모전 출전 횟수 (0~10)
 }
 
 interface CheckState {
   username: boolean | null
   nickname: boolean | null
 }
+
+const CONTEST_COUNTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 export default function SignupPage() {
   const router = useRouter()
@@ -32,16 +35,17 @@ export default function SignupPage() {
     nickname: '',
     studentId: '',
     skillLevel: '초급',
+    contestCount: 0,
   })
   const [showPassword, setShowPassword] = useState(false)
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false)
   const [loading, setLoading] = useState(false)
   const [checkLoading, setCheckLoading] = useState({ username: false, nickname: false })
   const [checked, setChecked] = useState<CheckState>({ username: null, nickname: null })
-  const [errors, setErrors] = useState<Partial<FormState & { general: string }>>({})
+  const [errors, setErrors] = useState<Partial<Record<keyof FormState | 'general', string>>>({})
 
   const validate = () => {
-    const newErrors: Partial<FormState & { general: string }> = {}
+    const newErrors: Partial<Record<keyof FormState | 'general', string>> = {}
     if (!/^[a-z0-9]{4,20}$/.test(form.username)) {
       newErrors.username = '영문 소문자와 숫자, 4~20자로 입력해주세요.'
     }
@@ -68,7 +72,9 @@ export default function SignupPage() {
     if (!value) return
     setCheckLoading((prev) => ({ ...prev, [field]: true }))
     try {
-      const res = await fetch(`/api/auth/check-${field === 'username' ? 'username' : 'nickname'}?value=${value}`)
+      const res = await fetch(
+        `/api/auth/check-${field === 'username' ? 'username' : 'nickname'}?value=${value}`
+      )
       const data = await res.json()
       setChecked((prev) => ({ ...prev, [field]: !data.exists }))
       if (data.exists) {
@@ -81,11 +87,11 @@ export default function SignupPage() {
     }
   }
 
-  const handleChange = (field: keyof FormState, value: string) => {
+  const handleChange = (field: keyof FormState, value: string | number) => {
     setForm((prev) => ({ ...prev, [field]: value }))
     if (field === 'username') setChecked((prev) => ({ ...prev, username: null }))
     if (field === 'nickname') setChecked((prev) => ({ ...prev, nickname: null }))
-    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: '' }))
+    if (errors[field as keyof FormState]) setErrors((prev) => ({ ...prev, [field]: '' }))
   }
 
   const isFormValid =
@@ -119,6 +125,7 @@ export default function SignupPage() {
           nickname: form.nickname,
           studentId: form.studentId,
           skillLevel: form.skillLevel,
+          contestCount: form.contestCount,
         }),
       })
       const data = await res.json()
@@ -188,8 +195,11 @@ export default function SignupPage() {
               value={form.password}
               onChange={(e) => handleChange('password', e.target.value)}
             />
-            <button type="button" onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+            >
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
@@ -207,8 +217,11 @@ export default function SignupPage() {
               value={form.passwordConfirm}
               onChange={(e) => handleChange('passwordConfirm', e.target.value)}
             />
-            <button type="button" onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+            <button
+              type="button"
+              onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+            >
               {showPasswordConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
@@ -283,15 +296,18 @@ export default function SignupPage() {
           )}
         </div>
 
-        {/* 실력 수준 */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">실력 수준</label>
+        {/* ─── 스포츠 실력 ─── */}
+        <div className="border border-slate-100 rounded-2xl p-4 space-y-3 bg-slate-50">
+          <div className="flex items-center gap-2">
+            <Swords size={16} className="text-primary" />
+            <p className="text-sm font-semibold text-slate-700">스포츠 실력 수준</p>
+          </div>
           <div className="flex gap-2">
             {(['초급', '중급', '고수'] as SkillLevel[]).map((level) => (
               <button
                 key={level}
                 type="button"
-                onClick={() => setForm({ ...form, skillLevel: level })}
+                onClick={() => handleChange('skillLevel', level)}
                 className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors border-2 ${
                   form.skillLevel === level
                     ? 'bg-primary text-white border-primary'
@@ -302,6 +318,43 @@ export default function SignupPage() {
               </button>
             ))}
           </div>
+          <p className="text-xs text-slate-400">축구·풋살·농구·e스포츠 등 스포츠 매치에 사용됩니다</p>
+        </div>
+
+        {/* ─── 공모전 출전 횟수 ─── */}
+        <div className="border border-slate-100 rounded-2xl p-4 space-y-3 bg-amber-50">
+          <div className="flex items-center gap-2">
+            <Trophy size={16} className="text-yellow-600" />
+            <p className="text-sm font-semibold text-slate-700">공모전 출전 횟수</p>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {CONTEST_COUNTS.map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => handleChange('contestCount', n)}
+                className={`py-2 rounded-xl text-sm font-semibold transition-colors border-2 ${
+                  form.contestCount === n
+                    ? 'bg-yellow-500 text-white border-yellow-500'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-yellow-400'
+                }`}
+              >
+                {n}회
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => handleChange('contestCount', 10)}
+              className={`py-2 rounded-xl text-sm font-semibold transition-colors border-2 ${
+                form.contestCount === 10
+                  ? 'bg-yellow-500 text-white border-yellow-500'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-yellow-400'
+              }`}
+            >
+              10회+
+            </button>
+          </div>
+          <p className="text-xs text-slate-500">현재까지 참가한 공모전 횟수를 선택해주세요</p>
         </div>
 
         {errors.general && (

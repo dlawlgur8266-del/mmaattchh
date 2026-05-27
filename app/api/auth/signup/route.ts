@@ -4,7 +4,7 @@ import { buildEmail } from '@/lib/utils'
 
 export async function POST(req: NextRequest) {
   try {
-    const { username, password, fullName, nickname, studentId, skillLevel } = await req.json()
+    const { username, password, fullName, nickname, studentId, skillLevel, contestCount } = await req.json()
 
     // Validate
     if (!username || !password || !fullName || !nickname || !studentId) {
@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
       full_name: fullName,
       student_id: studentId,
       skill_level: skillLevel || '초급',
+      contest_count: typeof contestCount === 'number' ? Math.min(Math.max(contestCount, 0), 10) : 0,
     })
 
     if (profileError) {
