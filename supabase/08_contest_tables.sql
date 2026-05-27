@@ -4,8 +4,20 @@
 
 -- profiles 테이블에 공모전 출전 횟수 컬럼 추가
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS contest_count INTEGER DEFAULT 0;
-ALTER TABLE profiles ADD CONSTRAINT IF NOT EXISTS profiles_contest_count_check
-  CHECK (contest_count BETWEEN 0 AND 10);
+
+-- 제약 조건은 IF NOT EXISTS 미지원 → DO 블록으로 중복 방지
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE table_name = 'profiles'
+      AND constraint_name = 'profiles_contest_count_check'
+  ) THEN
+    ALTER TABLE profiles ADD CONSTRAINT profiles_contest_count_check
+      CHECK (contest_count BETWEEN 0 AND 10);
+  END IF;
+END
+$$;
 
 -- contest_matches: 공모전 팀원 모집 게시글
 CREATE TABLE IF NOT EXISTS contest_matches (
