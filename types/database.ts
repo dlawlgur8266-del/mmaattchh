@@ -24,6 +24,7 @@ export interface Profile {
   student_id: string
   skill_level: SkillLevel          // 스포츠 실력 (초급/중급/고수)
   contest_count?: number           // 공모전 출전 횟수 (0~10)
+  department?: string              // 소속 학과
   created_at: string
   updated_at: string
 }

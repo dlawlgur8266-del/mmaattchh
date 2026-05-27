@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Eye, EyeOff, UserPlus, CheckCircle, XCircle, Trophy, Swords } from 'lucide-react'
+import { Eye, EyeOff, UserPlus, CheckCircle, XCircle, Trophy, Swords, GraduationCap, ChevronDown, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { SkillLevel } from '@/types/database'
+import { CBNU_DEPARTMENTS } from '@/data/departments'
 
 interface FormState {
   username: string
@@ -14,8 +15,9 @@ interface FormState {
   fullName: string
   nickname: string
   studentId: string
-  skillLevel: SkillLevel     // 스포츠 실력
-  contestCount: number       // 공모전 출전 횟수 (0~10)
+  department: string
+  skillLevel: SkillLevel
+  contestCount: number
 }
 
 interface CheckState {
@@ -34,6 +36,7 @@ export default function SignupPage() {
     fullName: '',
     nickname: '',
     studentId: '',
+    department: '',
     skillLevel: '초급',
     contestCount: 0,
   })
@@ -43,6 +46,30 @@ export default function SignupPage() {
   const [checkLoading, setCheckLoading] = useState({ username: false, nickname: false })
   const [checked, setChecked] = useState<CheckState>({ username: null, nickname: null })
   const [errors, setErrors] = useState<Partial<Record<keyof FormState | 'general', string>>>({})
+
+  // 학과 검색 드롭다운
+  const [deptSearch, setDeptSearch] = useState('')
+  const [showDeptDropdown, setShowDeptDropdown] = useState(false)
+  const deptRef = useRef<HTMLDivElement>(null)
+
+  // 외부 클릭 시 드롭다운 닫기
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (deptRef.current && !deptRef.current.contains(e.target as Node)) {
+        setShowDeptDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  // 검색어로 필터링된 학과 목록
+  const filteredColleges = CBNU_DEPARTMENTS.map((col) => ({
+    college: col.college,
+    departments: col.departments.filter((d) =>
+      d.includes(deptSearch) || col.college.includes(deptSearch)
+    ),
+  })).filter((col) => col.departments.length > 0)
 
   const validate = () => {
     const newErrors: Partial<Record<keyof FormState | 'general', string>> = {}
@@ -63,6 +90,9 @@ export default function SignupPage() {
     }
     if (!/^\d{10}$/.test(form.studentId)) {
       newErrors.studentId = '학번은 10자리 숫자여야 합니다. (예: 2024123456)'
+    }
+    if (!form.department) {
+      newErrors.department = '학과를 선택해주세요.'
     }
     return newErrors
   }
@@ -100,7 +130,8 @@ export default function SignupPage() {
     form.password === form.passwordConfirm &&
     form.fullName.length >= 2 &&
     form.nickname.length >= 2 &&
-    form.studentId.length === 10
+    form.studentId.length === 10 &&
+    !!form.department
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -124,6 +155,7 @@ export default function SignupPage() {
           fullName: form.fullName,
           nickname: form.nickname,
           studentId: form.studentId,
+          department: form.department,
           skillLevel: form.skillLevel,
           contestCount: form.contestCount,
         }),
@@ -293,6 +325,96 @@ export default function SignupPage() {
           {errors.studentId && <p className="text-red-500 text-xs mt-1">{errors.studentId}</p>}
           {form.studentId.length === 10 && !errors.studentId && (
             <p className="text-green-500 text-xs mt-1">✓ 올바른 형식의 학번입니다.</p>
+          )}
+        </div>
+
+        {/* ─── 학과 선택 (검색 드롭다운) ─── */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5 flex items-center gap-1.5">
+            <GraduationCap size={15} className="text-primary" />
+            소속 학과
+          </label>
+          <div className="relative" ref={deptRef}>
+            {/* 선택된 학과 표시 / 검색 입력 */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowDeptDropdown((prev) => !prev)
+                setDeptSearch('')
+              }}
+              className={`input-field w-full text-left flex items-center justify-between pr-10 ${
+                form.department ? 'text-slate-800' : 'text-slate-400'
+              }`}
+            >
+              <span className="truncate">
+                {form.department || '학과를 선택해주세요'}
+              </span>
+              <ChevronDown
+                size={16}
+                className={`absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-transform ${
+                  showDeptDropdown ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+
+            {/* 드롭다운 */}
+            {showDeptDropdown && (
+              <div className="absolute z-50 mt-1 w-full bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
+                {/* 검색창 */}
+                <div className="p-2 border-b border-slate-100">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      className="w-full pl-8 pr-3 py-2 text-sm bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:border-primary"
+                      placeholder="학과/단과대학 검색..."
+                      value={deptSearch}
+                      onChange={(e) => setDeptSearch(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                {/* 학과 목록 */}
+                <div className="max-h-56 overflow-y-auto">
+                  {filteredColleges.length === 0 ? (
+                    <p className="text-center text-slate-400 text-sm py-4">검색 결과가 없습니다</p>
+                  ) : (
+                    filteredColleges.map((col) => (
+                      <div key={col.college}>
+                        {/* 단과대학 헤더 */}
+                        <div className="px-3 py-1.5 text-xs font-bold text-slate-400 bg-slate-50 sticky top-0">
+                          {col.college}
+                        </div>
+                        {/* 학과 목록 */}
+                        {col.departments.map((dept) => (
+                          <button
+                            key={dept}
+                            type="button"
+                            onClick={() => {
+                              handleChange('department', dept)
+                              setShowDeptDropdown(false)
+                              setDeptSearch('')
+                            }}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-primary/5 transition-colors ${
+                              form.department === dept
+                                ? 'text-primary font-semibold bg-primary/5'
+                                : 'text-slate-700'
+                            }`}
+                          >
+                            {dept}
+                          </button>
+                        ))}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          {errors.department && <p className="text-red-500 text-xs mt-1">{errors.department}</p>}
+          {form.department && (
+            <p className="text-green-500 text-xs mt-1">✓ {form.department}</p>
           )}
         </div>
 

@@ -444,6 +444,12 @@ export default function ProfilePage() {
             <p className="text-xs text-slate-400 mb-1">학번</p>
             <p className="font-semibold text-slate-700 font-mono">{maskStudentId(profile.student_id)}</p>
           </div>
+          {profile.department && (
+            <div className="bg-slate-50 rounded-xl p-3 col-span-2">
+              <p className="text-xs text-slate-400 mb-1">소속 학과</p>
+              <p className="font-semibold text-slate-700">{profile.department}</p>
+            </div>
+          )}
         </div>
 
         <div>

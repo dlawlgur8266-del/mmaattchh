@@ -31,6 +31,32 @@ export async function GET(
   return NextResponse.json(data)
 }
 
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ roomId: string }> }
+) {
+  const { roomId } = await params
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+
+  const { data: room } = await supabase
+    .from('message_rooms')
+    .select('participant_1,participant_2')
+    .eq('id', roomId)
+    .single()
+
+  if (!room || (room.participant_1 !== user.id && room.participant_2 !== user.id)) {
+    return NextResponse.json({ error: '접근 권한이 없습니다.' }, { status: 403 })
+  }
+
+  // 채팅방 삭제 (messages는 CASCADE 삭제)
+  const { error } = await supabaseAdmin.from('message_rooms').delete().eq('id', roomId)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  return NextResponse.json({ success: true })
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ roomId: string }> }

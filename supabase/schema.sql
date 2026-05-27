@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS profiles (
 
 -- 공모전 출전 횟수 컬럼 (기존 테이블에 없으면 추가)
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS contest_count INTEGER DEFAULT 0;
+-- 소속 학과 컬럼
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS department TEXT;
 
 DROP TRIGGER IF EXISTS update_profiles_updated_at ON profiles;
 CREATE TRIGGER update_profiles_updated_at

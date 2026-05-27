@@ -4,7 +4,7 @@ import { buildEmail } from '@/lib/utils'
 
 export async function POST(req: NextRequest) {
   try {
-    const { username, password, fullName, nickname, studentId, skillLevel, contestCount } = await req.json()
+    const { username, password, fullName, nickname, studentId, department, skillLevel, contestCount } = await req.json()
 
     // Validate
     if (!username || !password || !fullName || !nickname || !studentId) {
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: authError.message }, { status: 400 })
     }
 
-    // Create profile (contest_count 컬럼이 아직 캐시에 없을 경우를 대비해 2단계로 처리)
+    // Create profile (contest_count/department 컬럼 캐시 누락 시 회원가입 자체가 실패하지 않도록 분리)
     const { error: profileError } = await supabaseAdmin.from('profiles').insert({
       id: authData.user.id,
       username,
@@ -37,12 +37,21 @@ export async function POST(req: NextRequest) {
       skill_level: skillLevel || '초급',
     })
 
-    if (!profileError && typeof contestCount === 'number' && contestCount >= 0) {
-      // contest_count는 별도 UPDATE — 컬럼 캐시 누락 시 회원가입 자체가 실패하지 않도록 분리
-      await supabaseAdmin
-        .from('profiles')
-        .update({ contest_count: Math.min(Math.max(contestCount, 0), 10) })
-        .eq('id', authData.user.id)
+    if (!profileError) {
+      // contest_count, department는 별도 UPDATE — 컬럼 캐시 누락 시 회원가입 자체가 실패하지 않도록 분리
+      const extra: Record<string, unknown> = {}
+      if (typeof contestCount === 'number' && contestCount >= 0) {
+        extra.contest_count = Math.min(Math.max(contestCount, 0), 10)
+      }
+      if (department && typeof department === 'string') {
+        extra.department = department
+      }
+      if (Object.keys(extra).length > 0) {
+        await supabaseAdmin
+          .from('profiles')
+          .update(extra)
+          .eq('id', authData.user.id)
+      }
     }
 
     if (profileError) {
