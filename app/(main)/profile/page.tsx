@@ -7,10 +7,11 @@ import {
 } from 'lucide-react'
 import { StarRating } from '@/components/review/StarRating'
 import { SportBadge, LevelBadge, StatusBadge } from '@/components/ui/Badge'
-import { MatchCalendar } from '@/components/ui/Calendar'
+import { MatchCalendar, type ContestEvent } from '@/components/ui/Calendar'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { createClient } from '@/lib/supabase/client'
 import { maskStudentId, formatDate } from '@/lib/utils'
+import { CATEGORY_COLORS } from '@/data/contests'
 import type { Profile, Review, SkillLevel, Match, Sport, MatchSize, MyMatch } from '@/types/database'
 import { SPORT_META, SPORT_ALLOWED_SIZES } from '@/types/database'
 import toast from 'react-hot-toast'
@@ -31,7 +32,7 @@ interface EditMatchForm {
   matchTime: string
 }
 
-type TabType = '내 매치글' | '내 경기' | '캘린더' | '매너 평가'
+type TabType = '내 매치글' | '내 경기' | '내 공모전' | '캘린더' | '매너 평가'
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -59,6 +60,9 @@ export default function ProfilePage() {
   // 내 경기 (확정된 매치)
   const [myConfirmedMatches, setMyConfirmedMatches] = useState<MyMatch[]>([])
   const [cancellingId, setCancellingId] = useState<string | null>(null)
+
+  // 내 공모전
+  const [myContestEvents, setMyContestEvents] = useState<ContestEvent[]>([])
 
   const supabase = createClient()
   const today = new Date().toISOString().split('T')[0]
@@ -165,6 +169,64 @@ export default function ProfilePage() {
     setMyConfirmedMatches(unique)
   }, [supabase])
 
+  // ────────────── 내 공모전 로드 ──────────────
+  const loadMyContests = useCallback(async (userId: string) => {
+    const events: ContestEvent[] = []
+
+    // 1) 내가 작성한 공모전 팀원 모집 게시글
+    const { data: authored } = await supabase
+      .from('contest_matches')
+      .select('id, contest_name, contest_category, region, deadline, team_size, current_count, status')
+      .eq('author_id', userId)
+      .order('deadline', { ascending: true })
+
+    if (authored) {
+      for (const c of authored as any[]) {
+        events.push({
+          id: c.id,
+          contestName: c.contest_name,
+          deadline: c.deadline,
+          category: c.contest_category,
+          region: c.region,
+          teamSize: c.team_size,
+          isAuthor: true,
+        })
+      }
+    }
+
+    // 2) 내가 수락된 신청자로 참여 중인 공모전
+    const { data: apps } = await supabase
+      .from('contest_applications')
+      .select(`
+        id,
+        contest_match:contest_matches!contest_applications_contest_match_id_fkey(
+          id, contest_name, contest_category, region, deadline, team_size
+        )
+      `)
+      .eq('applicant_id', userId)
+      .eq('status', 'accepted')
+
+    if (apps) {
+      for (const a of apps as any[]) {
+        const cm = Array.isArray(a.contest_match) ? a.contest_match[0] : a.contest_match
+        if (!cm) continue
+        // 중복 방지
+        if (events.some((e) => e.id === cm.id)) continue
+        events.push({
+          id: cm.id,
+          contestName: cm.contest_name,
+          deadline: cm.deadline,
+          category: cm.contest_category,
+          region: cm.region,
+          teamSize: cm.team_size,
+          isAuthor: false,
+        })
+      }
+    }
+
+    setMyContestEvents(events)
+  }, [supabase])
+
   // ────────────── 초기 데이터 로드 ──────────────
   useEffect(() => {
     const load = async () => {
@@ -192,11 +254,14 @@ export default function ProfilePage() {
       }
       if (m) setMyMatches(m)
 
-      await loadMyConfirmedMatches(user.id)
+      await Promise.all([
+        loadMyConfirmedMatches(user.id),
+        loadMyContests(user.id),
+      ])
       setLoading(false)
     }
     load()
-  }, [supabase, loadMyConfirmedMatches])
+  }, [supabase, loadMyConfirmedMatches, loadMyContests])
 
   // ────────────── 닉네임 저장 ──────────────
   const saveNickname = async () => {
@@ -320,7 +385,7 @@ export default function ProfilePage() {
   const allSizes: MatchSize[] = ['1vs1', '3vs3', '5vs5', '11vs11']
   const allowedSizes = editForm.sport ? SPORT_ALLOWED_SIZES[editForm.sport as Sport] : allSizes
 
-  const tabs: TabType[] = ['내 매치글', '내 경기', '캘린더', '매너 평가']
+  const tabs: TabType[] = ['내 매치글', '내 경기', '내 공모전', '캘린더', '매너 평가']
 
   return (
     <div className="space-y-5 max-w-xl">
@@ -576,6 +641,84 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {/* 내 공모전 */}
+      {activeTab === '내 공모전' && (
+        <div className="card p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Trophy size={18} className="text-yellow-500" />
+              <h2 className="font-bold text-slate-800">내 공모전</h2>
+            </div>
+            <span className="text-sm text-slate-400 bg-slate-100 px-2.5 py-0.5 rounded-full">
+              {myContestEvents.length}개
+            </span>
+          </div>
+
+          {myContestEvents.length === 0 ? (
+            <div className="text-center py-8 space-y-2">
+              <Trophy size={32} className="text-slate-200 mx-auto" />
+              <p className="text-slate-400 text-sm">참여 중인 공모전이 없습니다</p>
+              <p className="text-slate-300 text-xs">공모전 팀원 모집에 신청하거나 직접 모집하면 여기에 표시됩니다</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {myContestEvents.map((c) => {
+                const colorClass = (CATEGORY_COLORS as Record<string, string>)[c.category] ?? 'bg-slate-100 text-slate-600'
+                const today = new Date()
+                today.setHours(0, 0, 0, 0)
+                const deadlineDate = new Date(c.deadline)
+                const diffDays = Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+                const dDayLabel =
+                  diffDays < 0 ? '마감됨' :
+                  diffDays === 0 ? 'D-Day' :
+                  `D-${diffDays}`
+                const dDayColor =
+                  diffDays < 0 ? 'bg-slate-100 text-slate-400' :
+                  diffDays <= 3 ? 'bg-red-100 text-red-600' :
+                  diffDays <= 7 ? 'bg-yellow-100 text-yellow-700' :
+                  'bg-green-100 text-green-700'
+
+                return (
+                  <div
+                    key={c.id}
+                    className="rounded-xl p-4 bg-yellow-50 border-l-4 border-yellow-400 space-y-2"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-slate-800 text-sm leading-snug">{c.contestName}</p>
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colorClass}`}>
+                            {c.category}
+                          </span>
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-100 text-slate-600">
+                            {c.region}
+                          </span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            c.isAuthor ? 'bg-yellow-200 text-yellow-800' : 'bg-primary/10 text-primary'
+                          }`}>
+                            {c.isAuthor ? '내가 모집' : '참여중'}
+                          </span>
+                        </div>
+                      </div>
+                      <span className={`text-xs px-2.5 py-1 rounded-full font-bold shrink-0 ${dDayColor}`}>
+                        {dDayLabel}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <CalendarDays size={11} className="text-yellow-500" />
+                      <span>마감일: {c.deadline}</span>
+                      <span className="text-slate-300">·</span>
+                      <Users size={11} className="text-yellow-500" />
+                      <span>팀원 {c.teamSize}명</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 캘린더 */}
       {activeTab === '캘린더' && (
         <div className="card p-6 space-y-4">
@@ -584,7 +727,7 @@ export default function ProfilePage() {
             <h2 className="font-bold text-slate-800">경기 캘린더</h2>
           </div>
           <p className="text-xs text-slate-400">확정된 경기 일정을 달력에서 확인하세요</p>
-          <MatchCalendar matches={myConfirmedMatches} />
+          <MatchCalendar matches={myConfirmedMatches} contestEvents={myContestEvents} />
         </div>
       )}
 
