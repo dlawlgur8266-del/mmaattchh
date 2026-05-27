@@ -67,69 +67,92 @@ export default function ProfilePage() {
   const loadMyConfirmedMatches = useCallback(async (userId: string) => {
     const results: MyMatch[] = []
 
-    // 1) 내가 작성자인 확정 매치
-    const { data: authorMatches } = await supabase
+    // ── 1) 내가 작성자인 확정 매치 ──
+    // Step1: 내가 작성한 '매치확정' 매치 목록
+    const { data: confirmedMatches } = await supabase
       .from('matches')
-      .select(`
-        id, team_name, sport, match_size, location, match_datetime, status,
-        match_applications!inner(
-          id, applicant_id, status,
-          applicant:profiles!match_applications_applicant_id_fkey(nickname)
-        )
-      `)
+      .select('id, team_name, sport, match_size, location, status')
       .eq('author_id', userId)
-      .in('status', ['매치확정', '취소됨'])
-      .eq('match_applications.status', 'accepted')
+      .eq('status', '매치확정')
 
-    if (authorMatches) {
-      for (const m of authorMatches as any[]) {
-        const app = Array.isArray(m.match_applications)
-          ? m.match_applications[0]
-          : m.match_applications
-        const opponent = Array.isArray(app?.applicant) ? app.applicant[0] : app?.applicant
+    if (confirmedMatches) {
+      for (const m of confirmedMatches as any[]) {
+        // Step2: 해당 매치의 수락된 신청 조회
+        const { data: app } = await supabase
+          .from('match_applications')
+          .select('id, applicant_id, applicant:profiles!match_applications_applicant_id_fkey(nickname)')
+          .eq('match_id', m.id)
+          .eq('status', 'accepted')
+          .maybeSingle()
+
+        if (!app) continue
+        const opponent = Array.isArray(app.applicant) ? app.applicant[0] : app.applicant
+
+        // match_datetime은 없을 수 있으므로 별도 조회
+        const { data: matchFull } = await supabase
+          .from('matches')
+          .select('match_datetime')
+          .eq('id', m.id)
+          .maybeSingle()
+
         results.push({
           matchId: m.id,
-          applicationId: app?.id || '',
+          applicationId: app.id,
           teamName: m.team_name,
           opponentNickname: opponent?.nickname || '상대방',
           sport: m.sport,
           matchSize: m.match_size,
-          location: m.location,
-          matchDatetime: m.match_datetime || null,
+          location: m.location || '',
+          matchDatetime: (matchFull as any)?.match_datetime ?? null,
           status: m.status,
           isAuthor: true,
         })
       }
     }
 
-    // 2) 내가 신청자인 수락된 매치
+    // ── 2) 내가 신청자이고 수락된 매치 ──
     const { data: myApps } = await supabase
       .from('match_applications')
-      .select(`
-        id, status,
-        match:matches!match_applications_match_id_fkey(
-          id, team_name, sport, match_size, location, match_datetime, status,
-          author:profiles!matches_author_id_fkey(nickname)
-        )
-      `)
+      .select('id, match_id')
       .eq('applicant_id', userId)
       .eq('status', 'accepted')
 
     if (myApps) {
       for (const app of myApps as any[]) {
-        const m = Array.isArray(app.match) ? app.match[0] : app.match
+        // 해당 매치가 '매치확정' 상태인지 확인
+        const { data: m } = await supabase
+          .from('matches')
+          .select('id, team_name, sport, match_size, location, status, author_id')
+          .eq('id', app.match_id)
+          .eq('status', '매치확정')
+          .maybeSingle()
+
         if (!m) continue
-        const author = Array.isArray(m.author) ? m.author[0] : m.author
+
+        // 작성자 닉네임 조회
+        const { data: author } = await supabase
+          .from('profiles')
+          .select('nickname')
+          .eq('id', (m as any).author_id)
+          .maybeSingle()
+
+        // match_datetime 별도 조회
+        const { data: matchFull } = await supabase
+          .from('matches')
+          .select('match_datetime')
+          .eq('id', m.id)
+          .maybeSingle()
+
         results.push({
-          matchId: m.id,
+          matchId: (m as any).id,
           applicationId: app.id,
-          teamName: m.team_name,
-          opponentNickname: author?.nickname || '상대방',
-          sport: m.sport,
-          matchSize: m.match_size,
-          location: m.location,
-          matchDatetime: m.match_datetime || null,
-          status: m.status,
+          teamName: (m as any).team_name,
+          opponentNickname: (author as any)?.nickname || '상대방',
+          sport: (m as any).sport,
+          matchSize: (m as any).match_size,
+          location: (m as any).location || '',
+          matchDatetime: (matchFull as any)?.match_datetime ?? null,
+          status: (m as any).status,
           isAuthor: false,
         })
       }
@@ -282,9 +305,8 @@ export default function ProfilePage() {
       const res = await fetch(`/api/matches/${matchId}/cancel`, { method: 'PATCH' })
       const data = await res.json()
       if (!res.ok) { toast.error(data.error || '취소에 실패했습니다.'); return }
-      setMyConfirmedMatches((prev) =>
-        prev.map((m) => m.matchId === matchId ? { ...m, status: '취소됨' } : m)
-      )
+      // 취소 성공 → 내 경기 목록에서 즉시 삭제
+      setMyConfirmedMatches((prev) => prev.filter((m) => m.matchId !== matchId))
       toast.success('매치가 취소되었습니다. 상대방에게 알림이 전송됐어요.')
     } finally {
       setCancellingId(null)
@@ -485,15 +507,12 @@ export default function ProfilePage() {
                       weekday: 'short', hour: '2-digit', minute: '2-digit',
                     })
                   : null
-                const isCancelled = m.status === '취소됨'
 
                 return (
                   <div
                     key={m.matchId}
-                    className={`rounded-xl p-4 border-l-4 ${
-                      isCancelled ? 'bg-red-50/50 border-red-300' : 'bg-slate-50 border-l-4'
-                    }`}
-                    style={{ borderLeftColor: isCancelled ? undefined : meta.color }}
+                    className="rounded-xl p-4 bg-slate-50 border-l-4"
+                    style={{ borderLeftColor: meta.color }}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
@@ -527,34 +546,27 @@ export default function ProfilePage() {
                         </div>
 
                         {/* 역할 배지 */}
-                        <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        <div className="mt-2">
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                             m.isAuthor ? 'bg-primary/10 text-primary' : 'bg-accent/10 text-accent'
                           }`}>
                             {m.isAuthor ? '매치 주최자' : '매치 신청자'}
                           </span>
-                          {isCancelled && (
-                            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-500">
-                              취소됨
-                            </span>
-                          )}
                         </div>
                       </div>
 
                       {/* 취소 버튼 */}
-                      {!isCancelled && (
-                        <button
-                          onClick={() => handleCancelMatch(m.matchId)}
-                          disabled={cancellingId === m.matchId}
-                          className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold text-red-500 border border-red-200 hover:bg-red-50 transition-colors disabled:opacity-50 shrink-0"
-                        >
-                          {cancellingId === m.matchId ? (
-                            <div className="w-3 h-3 border border-red-400/40 border-t-red-500 rounded-full animate-spin" />
-                          ) : (
-                            <><XCircle size={13} /> 매치 취소</>
-                          )}
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleCancelMatch(m.matchId)}
+                        disabled={cancellingId === m.matchId}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold text-red-500 border border-red-200 hover:bg-red-50 transition-colors disabled:opacity-50 shrink-0"
+                      >
+                        {cancellingId === m.matchId ? (
+                          <div className="w-3 h-3 border border-red-400/40 border-t-red-500 rounded-full animate-spin" />
+                        ) : (
+                          <><XCircle size={13} /> 매치 취소</>
+                        )}
+                      </button>
                     </div>
                   </div>
                 )

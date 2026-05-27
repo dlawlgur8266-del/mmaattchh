@@ -30,7 +30,7 @@ export function useChat(roomId: string | null, userId: string | null) {
         scrollToBottom()
       })
 
-    // Mark messages as read
+    // 읽음 처리
     if (userId) {
       supabase
         .from('messages')
@@ -40,7 +40,7 @@ export function useChat(roomId: string | null, userId: string | null) {
         .then(() => {})
     }
 
-    // 실시간 구독 — 새 메시지 INSERT 감지
+    // 실시간 구독 — 상대방이 보낸 새 메시지 수신 (중복 방지)
     const channel = supabase
       .channel(`chat:${roomId}`)
       .on(
@@ -48,20 +48,45 @@ export function useChat(roomId: string | null, userId: string | null) {
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` },
         async (payload) => {
           const msg = payload.new as Message
-          // 발신자 정보 조회
-          const { data: sender } = await supabase
-            .from('profiles')
-            .select('id,nickname,username')
-            .eq('id', msg.sender_id)
-            .single()
+
+          // 내가 보낸 메시지는 낙관적 업데이트가 이미 처리 → ID 기준 중복 방지
           setMessages((prev) => {
-            // 중복 방지
             if (prev.some((m) => m.id === msg.id)) return prev
-            return [...prev, { ...msg, sender: sender ? (sender as unknown as Profile) : undefined }]
+
+            // temp 메시지를 실제 메시지로 교체 (sender_id, content 일치 여부로 판단)
+            const tempIdx = prev.findIndex(
+              (m) =>
+                m.id.startsWith('temp-') &&
+                m.sender_id === msg.sender_id &&
+                m.content === msg.content
+            )
+            if (tempIdx !== -1) {
+              const next = [...prev]
+              next[tempIdx] = { ...msg }
+              return next
+            }
+
+            return [...prev, msg]
           })
-          scrollToBottom()
-          // 채팅방에 있는 동안 수신 메시지 읽음 처리
-          if (userId && msg.sender_id !== userId) {
+
+          // 발신자 정보 보완 (상대방 메시지만)
+          if (msg.sender_id !== userId) {
+            const { data: sender } = await supabase
+              .from('profiles')
+              .select('id,nickname,username')
+              .eq('id', msg.sender_id)
+              .single()
+
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === msg.id
+                  ? { ...m, sender: sender ? (sender as unknown as Profile) : undefined }
+                  : m
+              )
+            )
+            scrollToBottom()
+
+            // 읽음 처리
             supabase.from('messages').update({ is_read: true }).eq('id', msg.id).then(() => {})
           }
         }
@@ -73,24 +98,57 @@ export function useChat(roomId: string | null, userId: string | null) {
     }
   }, [roomId, userId, supabase, scrollToBottom])
 
-  // API 라우트를 통해 메시지 전송 (RLS 우회, 알림 포함)
+  /**
+   * 메시지 전송
+   * - 낙관적 업데이트: 전송 즉시 화면에 표시
+   * - API 라우트로 전송 (supabaseAdmin → RLS 우회 + 알림 포함)
+   * - 전송 실패 시 임시 메시지 제거 + false 반환
+   */
   const sendMessage = async (content: string): Promise<boolean> => {
     if (!roomId || !userId || !content.trim() || sending) return false
     setSending(true)
+
+    // 1️⃣ 낙관적 업데이트: 임시 ID로 즉시 표시
+    const tempId = `temp-${Date.now()}`
+    const optimisticMsg: Message = {
+      id: tempId,
+      room_id: roomId,
+      sender_id: userId,
+      content: content.trim(),
+      is_read: false,
+      created_at: new Date().toISOString(),
+    }
+    setMessages((prev) => [...prev, optimisticMsg])
+    scrollToBottom()
+
     try {
       const res = await fetch(`/api/messages/${roomId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: content.trim() }),
       })
+
       if (!res.ok) {
-        const data = await res.json()
-        console.error('메시지 전송 실패:', data.error)
+        // 전송 실패 → 임시 메시지 제거
+        setMessages((prev) => prev.filter((m) => m.id !== tempId))
+        const err = await res.json()
+        console.error('메시지 전송 실패:', err.error)
         return false
       }
-      // 실시간 구독이 새 메시지를 자동으로 반영하므로 별도 추가 불필요
+
+      // 2️⃣ 서버 응답(실제 메시지)으로 임시 메시지 교체
+      const realMsg: Message = await res.json()
+      setMessages((prev) => {
+        // 혹시 Realtime이 이미 실제 ID를 추가했으면 temp만 제거
+        const withoutTemp = prev.filter((m) => m.id !== tempId)
+        if (withoutTemp.some((m) => m.id === realMsg.id)) return withoutTemp
+        return [...withoutTemp, realMsg]
+      })
+      scrollToBottom()
       return true
     } catch (err) {
+      // 네트워크 오류 → 임시 메시지 제거
+      setMessages((prev) => prev.filter((m) => m.id !== tempId))
       console.error('메시지 전송 오류:', err)
       return false
     } finally {

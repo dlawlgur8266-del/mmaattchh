@@ -11,25 +11,29 @@ export async function PATCH(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
 
-  // 매치 정보 조회
-  const { data: match } = await supabase
+  // ── 매치 정보 조회 ──
+  const { data: match, error: matchError } = await supabase
     .from('matches')
     .select('id, author_id, team_name, sport, status')
     .eq('id', matchId)
     .single()
 
-  if (!match) return NextResponse.json({ error: '매치를 찾을 수 없습니다.' }, { status: 404 })
-  if (match.status !== '매치확정') return NextResponse.json({ error: '확정된 매치만 취소할 수 있습니다.' }, { status: 400 })
+  if (matchError || !match) {
+    return NextResponse.json({ error: '매치를 찾을 수 없습니다.' }, { status: 404 })
+  }
+  if (match.status !== '매치확정') {
+    return NextResponse.json({ error: '확정된 매치만 취소할 수 있습니다.' }, { status: 400 })
+  }
 
-  // 수락된 신청 조회 (상대방 식별용)
+  // ── 수락된 신청 조회 (상대방 식별) ──
   const { data: application } = await supabase
     .from('match_applications')
     .select('id, applicant_id')
     .eq('match_id', matchId)
     .eq('status', 'accepted')
-    .single()
+    .maybeSingle()
 
-  // 작성자 또는 신청자만 취소 가능
+  // ── 권한 확인: 작성자 또는 신청자만 취소 가능 ──
   const isAuthor = match.author_id === user.id
   const isApplicant = application?.applicant_id === user.id
 
@@ -37,23 +41,29 @@ export async function PATCH(
     return NextResponse.json({ error: '매치 취소 권한이 없습니다.' }, { status: 403 })
   }
 
-  // 매치 상태를 '취소됨'으로 변경
-  const { error: updateError } = await supabaseAdmin
-    .from('matches')
-    .update({ status: '취소됨', updated_at: new Date().toISOString() })
-    .eq('id', matchId)
-
-  if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
-
-  // 신청 상태도 변경 (선택적)
+  // ── 신청 상태를 rejected로 변경 (DB 제약 없음) ──
   if (application) {
-    await supabaseAdmin
+    const { error: appError } = await supabaseAdmin
       .from('match_applications')
       .update({ status: 'rejected', updated_at: new Date().toISOString() })
       .eq('id', application.id)
+
+    if (appError) {
+      return NextResponse.json({ error: '취소 처리 중 오류가 발생했습니다.' }, { status: 500 })
+    }
   }
 
-  // 상대방에게 취소 알림 전송
+  // ── 매치 상태를 '모집중'으로 되돌림 (DB 기존 상태 호환) ──
+  const { error: matchUpdateError } = await supabaseAdmin
+    .from('matches')
+    .update({ status: '모집중', updated_at: new Date().toISOString() })
+    .eq('id', matchId)
+
+  if (matchUpdateError) {
+    return NextResponse.json({ error: '매치 상태 업데이트 중 오류가 발생했습니다.' }, { status: 500 })
+  }
+
+  // ── 상대방에게 실시간 알림 전송 ──
   const { data: myProfile } = await supabase
     .from('profiles')
     .select('nickname')
