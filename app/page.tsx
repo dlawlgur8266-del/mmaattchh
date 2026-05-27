@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { CbnuMarkWhite } from '@/components/ui/CbnuLogo'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,7 +23,6 @@ export default async function LandingPage() {
       {/* Header */}
       <header className="px-6 py-4 flex justify-between items-center max-w-5xl mx-auto w-full">
         <div className="flex items-center gap-2.5">
-          <CbnuMarkWhite size={36} />
           <span className="text-white font-bold text-xl tracking-tight">
             chungbuk-match
           </span>
@@ -47,9 +45,6 @@ export default async function LandingPage() {
 
       {/* Hero */}
       <main className="flex-1 flex flex-col items-center justify-center px-6 py-16 text-center max-w-4xl mx-auto w-full">
-        <div className="mb-8">
-          <CbnuMarkWhite size={96} />
-        </div>
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white leading-tight mb-6">
           지금 바로<br />
           <span className="text-accent">스포츠 매치</span>를<br />
@@ -92,10 +87,7 @@ export default async function LandingPage() {
 
       {/* Footer */}
       <footer className="py-6 text-center border-t border-white/10">
-        <div className="flex items-center justify-center gap-2">
-          <CbnuMarkWhite size={20} />
-          <span className="text-slate-400 text-sm">chungbuk-match</span>
-        </div>
+        <span className="text-slate-400 text-sm">chungbuk-match</span>
       </footer>
     </div>
   )
