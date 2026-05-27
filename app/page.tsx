@@ -15,6 +15,7 @@ export default async function LandingPage() {
     { emoji: '🥅', name: '풋살', desc: '실내에서 즐기는 박진감 넘치는 풋살' },
     { emoji: '🏀', name: '농구', desc: '농구 코트에서 실력을 겨루세요' },
     { emoji: '🎮', name: 'e스포츠', desc: '온라인 게임 매치를 찾아보세요' },
+    { emoji: '🏆', name: '공모전', desc: '공모전 팀원을 모집하고 함께 도전하세요' },
   ]
 
   return (
@@ -45,10 +46,8 @@ export default async function LandingPage() {
 
       {/* Hero */}
       <main className="flex-1 flex flex-col items-center justify-center px-6 py-16 text-center max-w-4xl mx-auto w-full">
-        <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white leading-tight mb-6">
-          지금 바로<br />
-          <span className="text-accent">스포츠 매치</span>를<br />
-          찾아보세요
+        <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white leading-tight mb-6 tracking-widest">
+          CHUNGBUK-MATCH
         </h1>
         <p className="text-slate-300 text-lg mb-10 max-w-xl">
           충북대 학번으로 가입하고, 원하는 종목과 수준에 맞는 팀을 찾아 매치를 신청하세요.
@@ -71,7 +70,7 @@ export default async function LandingPage() {
 
       {/* Sports Grid */}
       <section className="pb-16 px-6 max-w-5xl mx-auto w-full">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
           {sports.map((sport) => (
             <div
               key={sport.name}
