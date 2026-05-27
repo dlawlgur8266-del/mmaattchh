@@ -28,9 +28,9 @@ export function Header({ userId, nickname }: Props) {
     <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-100">
       <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
         <Link href="/match" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-          <CbnuMark size={32} />
+          <CbnuMark size={30} />
           <span className="text-lg font-bold tracking-tight text-[#1E3A5F]">
-            충북대<span className="text-accent">Match</span>
+            chungbuk-match
           </span>
         </Link>
 
