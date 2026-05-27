@@ -40,7 +40,7 @@ export default function LoginPage() {
   return (
     <div>
       <h2 className="text-2xl font-bold text-slate-800 mb-1">로그인</h2>
-      <p className="text-slate-500 text-sm mb-6">충북match에 오신 것을 환영합니다</p>
+      <p className="text-slate-500 text-sm mb-6">충북대 Match에 오신 것을 환영합니다 👋</p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
