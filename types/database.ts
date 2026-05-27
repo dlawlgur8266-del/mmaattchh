@@ -1,9 +1,9 @@
 export type SkillLevel = '초급' | '중급' | '고수'
 export type Sport = '축구' | '풋살' | '농구' | 'e스포츠'
 export type MatchSize = '1vs1' | '3vs3' | '5vs5' | '11vs11'
-export type MatchStatus = '모집중' | '매치확정'
+export type MatchStatus = '모집중' | '매치확정' | '취소됨'
 export type ApplicationStatus = 'pending' | 'accepted' | 'rejected'
-export type NotificationType = 'match_apply' | 'match_accept' | 'match_reject' | 'new_message'
+export type NotificationType = 'match_apply' | 'match_accept' | 'match_reject' | 'new_message' | 'match_cancel'
 
 export interface Profile {
   id: string
@@ -26,6 +26,7 @@ export interface Match {
   description: string
   required_level: SkillLevel
   status: MatchStatus
+  match_datetime?: string | null
   created_at: string
   updated_at: string
   // Joined fields
@@ -90,6 +91,20 @@ export interface Notification {
   related_id: string | null
   is_read: boolean
   created_at: string
+}
+
+// 내 경기 (확정된 매치) 정보
+export interface MyMatch {
+  matchId: string
+  applicationId: string
+  teamName: string       // 내 팀명(작성자) 또는 상대팀명
+  opponentNickname: string
+  sport: Sport
+  matchSize: MatchSize
+  location: string
+  matchDatetime: string | null
+  status: MatchStatus
+  isAuthor: boolean
 }
 
 // Sport metadata

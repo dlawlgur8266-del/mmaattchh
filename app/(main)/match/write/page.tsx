@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { PenSquare, MapPin } from 'lucide-react'
+import { PenSquare, MapPin, Calendar, Clock } from 'lucide-react'
 import { SPORT_META, SPORT_ALLOWED_SIZES } from '@/types/database'
 import type { Sport, SkillLevel, MatchSize } from '@/types/database'
 import toast from 'react-hot-toast'
@@ -20,10 +20,15 @@ export default function WriteMatchPage() {
     location: '',
     description: '',
     requiredLevel: '중급' as SkillLevel,
+    matchDate: '',   // YYYY-MM-DD
+    matchTime: '',   // HH:mm
   })
   const [loading, setLoading] = useState(false)
 
   const allowedSizes = form.sport ? SPORT_ALLOWED_SIZES[form.sport as Sport] : allSizes
+
+  // 오늘 날짜 (min 값)
+  const today = new Date().toISOString().split('T')[0]
 
   const handleSportChange = (s: Sport) => {
     const sizes = SPORT_ALLOWED_SIZES[s]
@@ -56,6 +61,18 @@ export default function WriteMatchPage() {
       toast.error('소개글을 10자 이상 입력해주세요.')
       return
     }
+    if (!form.matchDate) {
+      toast.error('경기 날짜를 선택해주세요.')
+      return
+    }
+    if (!form.matchTime) {
+      toast.error('경기 시간을 선택해주세요.')
+      return
+    }
+
+    // 날짜+시간 → ISO 문자열
+    const matchDatetime = new Date(`${form.matchDate}T${form.matchTime}:00`).toISOString()
+
     setLoading(true)
     try {
       const res = await fetch('/api/matches', {
@@ -68,6 +85,7 @@ export default function WriteMatchPage() {
           location: form.location,
           description: form.description,
           requiredLevel: form.requiredLevel,
+          matchDatetime,
         }),
       })
       const data = await res.json()
@@ -165,7 +183,7 @@ export default function WriteMatchPage() {
           <label className="block text-sm font-semibold text-slate-700 mb-2">
             <span className="flex items-center gap-1.5">
               <MapPin size={15} className="text-slate-500" />
-              장소
+              경기 장소
             </span>
           </label>
           <input
@@ -176,6 +194,54 @@ export default function WriteMatchPage() {
             onChange={(e) => setForm({ ...form, location: e.target.value })}
             maxLength={50}
           />
+        </div>
+
+        {/* 경기 날짜 & 시간 */}
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-2">
+            <span className="flex items-center gap-1.5">
+              <Calendar size={15} className="text-slate-500" />
+              경기 날짜 &amp; 시간
+            </span>
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs text-slate-400 mb-1.5 flex items-center gap-1">
+                <Calendar size={11} /> 날짜
+              </p>
+              <input
+                type="date"
+                className="input-field"
+                value={form.matchDate}
+                min={today}
+                onChange={(e) => setForm({ ...form, matchDate: e.target.value })}
+              />
+            </div>
+            <div>
+              <p className="text-xs text-slate-400 mb-1.5 flex items-center gap-1">
+                <Clock size={11} /> 시간
+              </p>
+              <input
+                type="time"
+                className="input-field"
+                value={form.matchTime}
+                onChange={(e) => setForm({ ...form, matchTime: e.target.value })}
+              />
+            </div>
+          </div>
+          {form.matchDate && form.matchTime && (
+            <p className="text-xs text-primary mt-2 font-medium">
+              📅{' '}
+              {new Date(`${form.matchDate}T${form.matchTime}:00`).toLocaleString('ko-KR', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                weekday: 'short',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </p>
+          )}
         </div>
 
         {/* 소개글 */}

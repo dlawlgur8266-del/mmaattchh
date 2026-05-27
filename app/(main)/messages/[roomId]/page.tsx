@@ -8,6 +8,7 @@ import { PageSpinner } from '@/components/ui/Spinner'
 import { useChat } from '@/hooks/useChat'
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useRef } from 'react'
+import toast from 'react-hot-toast'
 
 export default function ChatRoomPage({ params }: { params: Promise<{ roomId: string }> }) {
   const { roomId } = use(params)
@@ -15,7 +16,7 @@ export default function ChatRoomPage({ params }: { params: Promise<{ roomId: str
   const [userId, setUserId] = useState<string | null>(null)
   const [input, setInput] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
-  const { messages, loading, sendMessage, bottomRef } = useChat(roomId, userId)
+  const { messages, loading, sending, sendMessage, bottomRef } = useChat(roomId, userId)
 
   useEffect(() => {
     const supabase = createClient()
@@ -23,9 +24,14 @@ export default function ChatRoomPage({ params }: { params: Promise<{ roomId: str
   }, [])
 
   const handleSend = async () => {
-    if (!input.trim()) return
-    await sendMessage(input)
-    setInput('')
+    if (!input.trim() || sending) return
+    const content = input
+    setInput('') // 즉시 입력창 초기화
+    const ok = await sendMessage(content)
+    if (!ok) {
+      toast.error('메시지 전송에 실패했습니다. 다시 시도해주세요.')
+      setInput(content) // 실패 시 복구
+    }
     inputRef.current?.focus()
   }
 
@@ -50,7 +56,7 @@ export default function ChatRoomPage({ params }: { params: Promise<{ roomId: str
         </button>
         <div>
           <h2 className="font-bold text-slate-800">매치 채팅</h2>
-          <p className="text-xs text-slate-400">매치 확정 상대와의 대화</p>
+          <p className="text-xs text-slate-400">매치 확정 상대와의 실시간 대화</p>
         </div>
       </div>
 
@@ -80,13 +86,18 @@ export default function ChatRoomPage({ params }: { params: Promise<{ roomId: str
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             autoFocus
+            disabled={sending}
           />
           <button
             onClick={handleSend}
-            disabled={!input.trim()}
+            disabled={!input.trim() || sending}
             className="p-3 bg-primary text-white rounded-xl hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
           >
-            <Send size={18} />
+            {sending ? (
+              <div className="w-[18px] h-[18px] border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <Send size={18} />
+            )}
           </button>
         </div>
       </div>

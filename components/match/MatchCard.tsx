@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Users, Zap, MapPin } from 'lucide-react'
+import { Users, Zap, MapPin, Calendar, Clock } from 'lucide-react'
 import { SportBadge, LevelBadge, StatusBadge } from '@/components/ui/Badge'
 import { PendingApplications } from './PendingApplications'
 import { SPORT_META } from '@/types/database'
@@ -16,14 +16,26 @@ interface MatchCardProps {
   onApplied?: () => void
 }
 
+function formatMatchDatetime(dt: string | null | undefined): string | null {
+  if (!dt) return null
+  const d = new Date(dt)
+  return d.toLocaleString('ko-KR', {
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 export function MatchCard({ match, currentUserId, alreadyApplied = false, onApplied }: MatchCardProps) {
   const [applied, setApplied] = useState(alreadyApplied)
   const [loading, setLoading] = useState(false)
-  // 수락 시 카드 상태를 즉시 "매치확정"으로 반영
   const [status, setStatus] = useState<MatchStatus>(match.status)
 
   const isOwn = currentUserId === match.author_id
   const meta = SPORT_META[match.sport]
+  const matchDateStr = formatMatchDatetime(match.match_datetime)
 
   const handleApply = async () => {
     if (!currentUserId) {
@@ -77,6 +89,14 @@ export function MatchCard({ match, currentUserId, alreadyApplied = false, onAppl
             <span>{match.location}</span>
           </div>
         )}
+        {/* 경기 날짜/시간 */}
+        {matchDateStr && (
+          <div className="flex items-center gap-1 mt-1 text-primary text-xs font-medium">
+            <Calendar size={12} />
+            <Clock size={12} />
+            <span>{matchDateStr}</span>
+          </div>
+        )}
       </div>
 
       {/* 소개글 */}
@@ -85,19 +105,18 @@ export function MatchCard({ match, currentUserId, alreadyApplied = false, onAppl
       {/* 하단 액션 */}
       <div className="mt-auto pt-1">
         {isOwn ? (
-          /* ── 작성자 뷰 ── */
           <div>
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-semibold text-slate-500">내 게시글</span>
               <StatusBadge status={status} />
             </div>
-
-            {/* 마감 전에만 신청 현황 표시 */}
             {status === '모집중' ? (
               <PendingApplications
                 matchId={match.id}
                 onAccepted={() => setStatus('매치확정')}
               />
+            ) : status === '취소됨' ? (
+              <p className="text-xs text-center text-red-400 py-2">취소된 매치입니다</p>
             ) : (
               <p className="text-xs text-center text-slate-400 py-2">매치가 확정되었습니다</p>
             )}
@@ -105,6 +124,10 @@ export function MatchCard({ match, currentUserId, alreadyApplied = false, onAppl
         ) : status === '매치확정' ? (
           <button disabled className="w-full py-2.5 rounded-xl text-sm font-medium bg-slate-100 text-slate-400 cursor-not-allowed">
             매치 확정됨
+          </button>
+        ) : status === '취소됨' ? (
+          <button disabled className="w-full py-2.5 rounded-xl text-sm font-medium bg-red-50 text-red-400 cursor-not-allowed">
+            취소된 매치
           </button>
         ) : applied ? (
           <button disabled className="w-full py-2.5 rounded-xl text-sm font-medium bg-green-100 text-green-700 cursor-not-allowed flex items-center justify-center gap-1.5">

@@ -27,16 +27,21 @@ export function LevelBadge({ level }: { level: SkillLevel }) {
 }
 
 export function StatusBadge({ status }: { status: MatchStatus }) {
+  const styles =
+    status === '모집중'
+      ? { badge: 'bg-green-100 text-green-700', dot: 'bg-green-500' }
+      : status === '취소됨'
+      ? { badge: 'bg-red-100 text-red-500', dot: 'bg-red-400' }
+      : { badge: 'bg-slate-100 text-slate-500', dot: 'bg-slate-400' }
+
   return (
     <span
       className={cn(
         'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold',
-        status === '모집중'
-          ? 'bg-green-100 text-green-700'
-          : 'bg-slate-100 text-slate-500'
+        styles.badge
       )}
     >
-      <span className={cn('w-1.5 h-1.5 rounded-full', status === '모집중' ? 'bg-green-500' : 'bg-slate-400')} />
+      <span className={cn('w-1.5 h-1.5 rounded-full', styles.dot)} />
       {status}
     </span>
   )

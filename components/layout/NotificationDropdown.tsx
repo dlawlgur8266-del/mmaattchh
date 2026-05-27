@@ -114,6 +114,18 @@ export function NotificationDropdown({
                         </button>
                       </div>
                     )}
+
+                    {/* match_cancel: 내 경기 확인 버튼 */}
+                    {notif.type === 'match_cancel' && (
+                      <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => { router.push('/profile'); onClose() }}
+                          className="px-3 py-1.5 bg-red-500 text-white text-xs rounded-lg font-semibold hover:bg-red-600 transition-colors"
+                        >
+                          내 경기 확인
+                        </button>
+                      </div>
+                    )}
                   </div>
                   {!notif.is_read && (
                     <button
