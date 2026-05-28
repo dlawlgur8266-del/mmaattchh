@@ -38,7 +38,11 @@ export function ContestMatchCard({ match, currentUserId, onDeleted }: Props) {
   const categoryColors = CATEGORY_COLORS[match.contest_category as keyof typeof CATEGORY_COLORS] ||
     { color: '#475569', bg: '#F1F5F9' }
 
-  // ── supabase 싱글턴: const 변수 재선언 불필요, 상위에서 한 번만 ──
+  // 부모 prop이 바뀌면 (페이지 리패치 시) 로컬 상태 동기화
+  useEffect(() => {
+    setCurrentCount(match.current_count)
+    setStatus(match.status)
+  }, [match.current_count, match.status])
 
   // 이미 신청했는지 확인
   const checkApplied = useCallback(async () => {
@@ -75,8 +79,35 @@ export function ContestMatchCard({ match, currentUserId, onDeleted }: Props) {
     checkApplied()
     fetchApplications()
 
+    // ── 이 매치의 current_count / status 실시간 구독 (모든 사용자) ──
+    // 수락이 일어나면 즉시 남은 인원 업데이트 + 마감 처리
+    const matchChannel = supabase
+      .channel(`contest-match-update:${match.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'contest_matches',
+        filter: `id=eq.${match.id}`,
+      }, (payload) => {
+        const updated = payload.new as any
+        setCurrentCount(updated.current_count)
+        setStatus(updated.status)
+        if (updated.status === '마감') {
+          setTimeout(() => onDeleted?.(match.id), 1200)
+        }
+      })
+      .subscribe((s) => {
+        if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT') {
+          console.warn(`[ContestMatchCard] match update Realtime ${s}`)
+        }
+      })
+
+    // 작성자: 신청 INSERT 구독 + 폴링
+    let appChannel: ReturnType<typeof supabase.channel> | null = null
+    let polling: ReturnType<typeof setInterval> | null = null
+
     if (isOwn) {
-      const channel = supabase
+      appChannel = supabase
         .channel(`contest-apps:${match.id}`)
         .on('postgres_changes', {
           event: 'INSERT',
@@ -86,19 +117,20 @@ export function ContestMatchCard({ match, currentUserId, onDeleted }: Props) {
         }, () => {
           fetchApplications()
         })
-        .subscribe((status) => {
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            console.warn(`[ContestMatchCard] Realtime ${status}`)
+        .subscribe((s) => {
+          if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT') {
+            console.warn(`[ContestMatchCard] apps Realtime ${s}`)
           }
         })
-      // 싱글턴 덕분에 deps에서 supabase 제거 가능 — 10초 폴링
-      const polling = setInterval(fetchApplications, 10000)
-      return () => {
-        supabase.removeChannel(channel)
-        clearInterval(polling)
-      }
+      polling = setInterval(fetchApplications, 10000)
     }
-  }, [isOwn, checkApplied, fetchApplications, match.id])
+
+    return () => {
+      supabase.removeChannel(matchChannel)
+      if (appChannel) supabase.removeChannel(appChannel)
+      if (polling) clearInterval(polling)
+    }
+  }, [isOwn, checkApplied, fetchApplications, match.id, onDeleted])
 
   const handleApply = async () => {
     if (!currentUserId) return toast.error('로그인이 필요합니다.')
@@ -126,10 +158,8 @@ export function ContestMatchCard({ match, currentUserId, onDeleted }: Props) {
       setCurrentCount(newCount)
       if (newCount >= match.team_size) {
         setStatus('마감')
+        toast('🎉 팀원 모집이 완료되어 게시글이 마감됩니다.', { icon: '✅' })
         setTimeout(() => onDeleted?.(match.id), 1500)
-      }
-      if (data.roomId) {
-        // 채팅방으로 이동 제안
       }
     } finally {
       setLoadingId(null)
@@ -149,7 +179,14 @@ export function ContestMatchCard({ match, currentUserId, onDeleted }: Props) {
     }
   }
 
+  // 마감 상태면 카드 숨김
   if (status === '마감') return null
+
+  // 남은 자리 색상 (많을수록 초록, 적을수록 빨강)
+  const remainingColor =
+    remaining <= 1 ? 'text-red-600 bg-red-50 border-red-200' :
+    remaining <= 2 ? 'text-orange-600 bg-orange-50 border-orange-200' :
+    'text-green-700 bg-green-50 border-green-200'
 
   return (
     <div className="card p-5 hover:shadow-md transition-shadow flex flex-col gap-3">
@@ -200,15 +237,17 @@ export function ContestMatchCard({ match, currentUserId, onDeleted }: Props) {
           <MapPin size={11} className="text-slate-400" />
           <span>{match.region}</span>
         </div>
-        <div className="flex items-center gap-1 col-span-2">
-          <Users size={11} className="text-yellow-500" />
-          <span>
-            팀원 모집:{' '}
-            <strong className={remaining === 0 ? 'text-red-500' : 'text-yellow-600'}>
-              {remaining}명
-            </strong>
-            <span className="text-slate-400"> / {match.team_size}명</span>
-          </span>
+      </div>
+
+      {/* 남은 자리 — 실시간 업데이트 */}
+      <div className={`flex items-center justify-between px-3 py-2 rounded-xl border ${remainingColor}`}>
+        <div className="flex items-center gap-1.5">
+          <Users size={13} />
+          <span className="text-xs font-semibold">남은 자리</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-lg font-black">{remaining}</span>
+          <span className="text-xs font-medium opacity-70">/ {match.team_size}명</span>
         </div>
       </div>
 
@@ -241,38 +280,38 @@ export function ContestMatchCard({ match, currentUserId, onDeleted }: Props) {
                   </span>
                 </p>
                 {applications.map((app) => (
-                  <div key={app.id} className="flex items-center justify-between bg-slate-50 rounded-xl p-2.5 gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-7 h-7 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
-                        <User size={13} className="text-yellow-600" />
+                  <div key={app.id} className="bg-slate-50 rounded-2xl p-3.5 border border-slate-100">
+                    <div className="flex items-center gap-2.5 mb-3">
+                      <div className="w-9 h-9 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <User size={16} className="text-yellow-600" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-700 truncate">
+                        <p className="text-sm font-bold text-slate-700 truncate">
                           {app.applicant?.nickname ?? '알 수 없음'}
                         </p>
                         <p className="text-xs text-slate-400">
-                          출전: {app.applicant?.contest_count ?? 0}회
+                          공모전 출전 {app.applicant?.contest_count ?? 0}회
                         </p>
                       </div>
                     </div>
-                    <div className="flex gap-1.5 flex-shrink-0">
+                    <div className="flex gap-2">
                       <button
                         onClick={() => handleAccept(app)}
                         disabled={!!loadingId}
-                        className="flex items-center gap-1 px-2.5 py-1.5 bg-green-500 text-white text-xs font-semibold rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50"
+                        className="flex-1 flex items-center justify-center gap-1 py-2 bg-green-500 text-white text-xs font-semibold rounded-xl hover:bg-green-600 transition-colors disabled:opacity-50"
                       >
                         {loadingId === app.id ? (
-                          <div className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" />
+                          <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                         ) : (
-                          <><Check size={11} /> 수락</>
+                          <><Check size={12} /> 수락</>
                         )}
                       </button>
                       <button
                         onClick={() => handleReject(app)}
                         disabled={!!loadingId}
-                        className="flex items-center gap-1 px-2.5 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50"
+                        className="flex-1 flex items-center justify-center gap-1 py-2 bg-red-500 text-white text-xs font-semibold rounded-xl hover:bg-red-600 transition-colors disabled:opacity-50"
                       >
-                        <X size={11} /> 거절
+                        <X size={12} /> 거절
                       </button>
                     </div>
                   </div>
@@ -299,7 +338,7 @@ export function ContestMatchCard({ match, currentUserId, onDeleted }: Props) {
         ) : (
           <button
             onClick={handleApply}
-            disabled={applying || daysLeft < 0}
+            disabled={applying || daysLeft < 0 || remaining <= 0}
             className="w-full py-2.5 rounded-xl text-sm font-semibold bg-yellow-500 text-white hover:bg-yellow-600 transition-colors disabled:opacity-70 flex items-center justify-center gap-1.5"
           >
             {applying ? (

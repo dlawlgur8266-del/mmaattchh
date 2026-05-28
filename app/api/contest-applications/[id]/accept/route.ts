@@ -93,7 +93,7 @@ export async function PATCH(
     related_id: roomId || app.contest_match_id,
   })
 
-  // 팀이 가득 찼을 때 나머지 신청자 자동 거절
+  // 팀이 가득 찼을 때: 나머지 신청자 자동 거절 + 게시글 자동 삭제
   if (isTeamFull) {
     const { data: pendingApps } = await supabaseAdmin
       .from('contest_applications')
@@ -108,7 +108,6 @@ export async function PATCH(
         .eq('contest_match_id', app.contest_match_id)
         .eq('status', 'pending')
 
-      // 각 신청자에게 거절 알림
       const notifications = pendingApps.map((pa) => ({
         user_id: pa.applicant_id,
         type: 'contest_reject' as const,
@@ -117,6 +116,9 @@ export async function PATCH(
       }))
       await supabaseAdmin.from('notifications').insert(notifications)
     }
+
+    // 팀 정원 충족 → status='마감' 으로 목록에서 즉시 제거 (이미 위에서 처리됨)
+    // 채팅방/메시지는 유지되므로 DB 레코드는 삭제하지 않음
   }
 
   return NextResponse.json({ success: true, roomId, teamFull: isTeamFull })
