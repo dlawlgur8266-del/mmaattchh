@@ -158,12 +158,23 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    console.log(`[sync-contests] 동기화 완료: 올콘 ${allConData.length}개, 링커리어 ${linkareerData.length}개`)
+    // 마감일 + 1일 지난 공모전 자동 삭제
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayStr = yesterday.toISOString().split('T')[0]
+    const { count: deletedCount } = await supabaseAdmin
+      .from('external_contests')
+      .delete({ count: 'exact' })
+      .lt('deadline', yesterdayStr)
+      .not('deadline', 'is', null)
+
+    console.log(`[sync-contests] 동기화 완료: 올콘 ${allConData.length}개, 링커리어 ${linkareerData.length}개, 만료 삭제 ${deletedCount ?? 0}개`)
     return NextResponse.json({
       success: true,
       synced: allContests.length,
       allCon: allConData.length,
       linkareer: linkareerData.length,
+      deleted: deletedCount ?? 0,
     })
   } catch (e) {
     console.error('[sync-contests] 오류:', e)
