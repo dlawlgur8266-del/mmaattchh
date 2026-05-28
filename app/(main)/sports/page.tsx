@@ -5,20 +5,20 @@ import { Calendar, Clock, MapPin, Users, ChevronLeft, ChevronRight, Loader2, Use
 import toast from 'react-hot-toast'
 
 const RESERVATION_STATUS_URL = 'https://sports.chungbuk.ac.kr/cbnu_facilities3_2'
-const RESERVATION_APPLY_URL  = 'http://sports.chungbuk.ac.kr/cbnu_facilities3_1'
+const RESERVATION_APPLY_URL  = 'https://sports.chungbuk.ac.kr/cbnu_facilities3_1'
 
 const FACILITIES = [
+  { id: 'main_field',   name: '종합운동장', sport: '축구' },
   { id: 'futsal_a',     name: '풋살장 A',   sport: '풋살' },
   { id: 'futsal_b',     name: '풋살장 B',   sport: '풋살' },
   { id: 'basketball_a', name: '농구장 A',   sport: '농구' },
   { id: 'basketball_b', name: '농구장 B',   sport: '농구' },
-  { id: 'tennis_a',     name: '테니스장 A', sport: '테니스' },
-  { id: 'tennis_b',     name: '테니스장 B', sport: '테니스' },
-  { id: 'tennis_c',     name: '테니스장 C', sport: '테니스' },
-  { id: 'tennis_d',     name: '테니스장 D', sport: '테니스' },
-  { id: 'tennis_e',     name: '테니스장 E', sport: '테니스' },
+  { id: 'tennis_a',     name: '테니스 A',   sport: '테니스' },
+  { id: 'tennis_b',     name: '테니스 B',   sport: '테니스' },
+  { id: 'tennis_c',     name: '테니스 C',   sport: '테니스' },
+  { id: 'tennis_d',     name: '테니스 D',   sport: '테니스' },
+  { id: 'tennis_e',     name: '테니스 E',   sport: '테니스' },
   { id: 'small_field',  name: '소운동장',   sport: '축구' },
-  { id: 'main_field',   name: '종합운동장', sport: '축구' },
 ] as const
 
 type FacilityId = typeof FACILITIES[number]['id']
@@ -176,10 +176,10 @@ export default function SportsPage() {
         </button>
       </div>
 
-      {/* 예약 현황 타임라인 */}
+      {/* 예약 신청 / 예약 현황 타임라인 */}
       <div className="bg-white rounded-2xl shadow-sm border p-4">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-800">{currentFacility.name} 예약 현황</h2>
+          <h2 className="font-semibold text-gray-800">{currentFacility.name} 예약 신청</h2>
           <div className="flex items-center gap-3">
             {lastCrawled && (
               <span className="text-xs text-gray-400">
@@ -313,50 +313,39 @@ export default function SportsPage() {
 }
 
 function SlotRow({ slot }: { slot: Slot }) {
-  if (slot.status === 'reserved') {
+  const timeLabel = `${slot.start_time} ~ ${slot.end_time}`
+
+  if (slot.status === 'available') {
     return (
-      <div className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-red-50 border border-red-100">
-        <div className="flex items-center gap-2 text-sm font-medium text-red-400">
+      <div className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-green-50 border border-green-200">
+        <div className="flex items-center gap-2 text-sm font-medium text-green-700">
           <Clock className="w-4 h-4" />
-          <span>{slot.start_time} ~ {slot.end_time}</span>
+          <span>{timeLabel}</span>
         </div>
-        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-600">
-          예약 마감
-        </span>
+        <a
+          href={RESERVATION_APPLY_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+        >
+          <ExternalLink size={11} />
+          예약 가능
+        </a>
       </div>
     )
   }
 
-  if (slot.status === 'closed') {
-    return (
-      <div className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gray-50">
-        <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
-          <Clock className="w-4 h-4" />
-          <span>{slot.start_time} ~ {slot.end_time}</span>
-        </div>
-        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-gray-200 text-gray-500">
-          운영 종료
-        </span>
-      </div>
-    )
-  }
-
-  // available
+  // reserved 또는 closed — 클릭 불가
+  const isReserved = slot.status === 'reserved'
   return (
-    <div className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-green-50 border border-green-200">
-      <div className="flex items-center gap-2 text-sm font-medium text-green-700">
+    <div className={`w-full flex items-center justify-between px-4 py-3 rounded-xl ${isReserved ? 'bg-red-50 border border-red-100' : 'bg-gray-50'}`}>
+      <div className={`flex items-center gap-2 text-sm font-medium ${isReserved ? 'text-red-400' : 'text-gray-400'}`}>
         <Clock className="w-4 h-4" />
-        <span>{slot.start_time} ~ {slot.end_time}</span>
+        <span>{timeLabel}</span>
       </div>
-      <a
-        href={RESERVATION_APPLY_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-      >
-        <ExternalLink size={11} />
-        예약 신청
-      </a>
+      <span className={`px-3 py-1 rounded-full text-xs font-semibold cursor-not-allowed ${isReserved ? 'bg-red-100 text-red-500' : 'bg-gray-200 text-gray-500'}`}>
+        예약 마감
+      </span>
     </div>
   )
 }
