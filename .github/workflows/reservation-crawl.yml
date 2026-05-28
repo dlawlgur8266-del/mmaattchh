@@ -23,3 +23,5 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          sport_username: ${{ secrets.SPORT_USERNAME }}
+          sport_PASSWORD: ${{ secrets.SPORT_PASSWORD }}
