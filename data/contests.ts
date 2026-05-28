@@ -15,6 +15,8 @@ export type ContestCategory =
 
 export type ContestRegion = '충청북도' | '충청남도' | '세종특별자치시' | '대전광역시'
 
+export type ContestSource = 'all-con' | 'linkareer' | 'contestkorea' | 'wevity'
+
 export interface Contest {
   id: string
   name: string
@@ -25,7 +27,29 @@ export interface Contest {
   maxTeamSize: number
   description: string
   url: string
-  source: 'all-con' | 'linkareer'
+  source: ContestSource
+}
+
+export const SOURCE_LABELS: Record<ContestSource, string> = {
+  'all-con':     '올콘 (all-con.co.kr)',
+  'linkareer':   '링커리어 (linkareer.com)',
+  'contestkorea':'공모전닷컴 (contestkorea.com)',
+  'wevity':      '위비티 (wevity.com)',
+}
+
+export function getSourceLabel(source: string): string {
+  return SOURCE_LABELS[source as ContestSource] ?? source
+}
+
+// DB ContestField → 프론트 ContestCategory 매핑
+export const FIELD_CATEGORY_MAP: Record<string, ContestCategory> = {
+  marketing:  '창업/마케팅',
+  video:      '사진/영상',
+  design:     '디자인/미술',
+  literature: '글/문학',
+  it:         'IT/과학',
+  arts:       '예술/공연',
+  academic:   '환경/사회',
 }
 
 export const CONTEST_CATEGORIES: ContestCategory[] = [

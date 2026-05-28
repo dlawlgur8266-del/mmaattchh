@@ -1,16 +1,20 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Trophy, MapPin, Calendar, Users, ExternalLink, Star } from 'lucide-react'
+import { Trophy, MapPin, Calendar, Users, ExternalLink, Star, Loader2 } from 'lucide-react'
 import {
   CONTESTS,
   CONTEST_CATEGORIES,
   CATEGORY_COLORS,
+  FIELD_CATEGORY_MAP,
   getContestsByCategory,
+  getSourceLabel,
   getDaysUntilDeadline,
   type ContestCategory,
   type ContestRegion,
 } from '@/data/contests'
+import type { Contest as DbContest } from '@/types/database'
+import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
 const REGIONS: ContestRegion[] = ['충청북도', '충청남도', '세종특별자치시', '대전광역시']
@@ -29,6 +33,8 @@ export default function ContestPage() {
   const [selectedRegion, setSelectedRegion] = useState<ContestRegion | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<ContestCategory>('전체')
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
+  const [dbContests, setDbContests] = useState<DbContest[]>([])
+  const [loadingDb, setLoadingDb] = useState(false)
 
   const filteredContests = selectedRegion
     ? getContestsByCategory(selectedRegion, selectedCategory)
@@ -36,12 +42,40 @@ export default function ContestPage() {
 
   const favoriteContests = CONTESTS.filter((c) => favoriteIds.has(c.id))
 
+  // DB 크롤링 공모전 필터 (field → category 매핑)
+  const filteredDbContests = dbContests.filter((c) => {
+    if (selectedCategory === '전체') return true
+    return FIELD_CATEGORY_MAP[c.field] === selectedCategory
+  })
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem(FAVORITES_KEY)
       if (stored) setFavoriteIds(new Set(JSON.parse(stored)))
     } catch {}
   }, [])
+
+  // 지역 선택 시 DB 공모전 fetch
+  useEffect(() => {
+    if (!selectedRegion) {
+      setDbContests([])
+      return
+    }
+    const today = new Date().toISOString().split('T')[0]
+    setLoadingDb(true)
+    const supabase = createClient()
+    supabase
+      .from('contests')
+      .select('*')
+      .eq('is_active', true)
+      .eq('region', selectedRegion)
+      .gte('end_date', today)
+      .order('end_date', { ascending: true })
+      .then(({ data }) => {
+        setDbContests((data as DbContest[]) || [])
+        setLoadingDb(false)
+      })
+  }, [selectedRegion])
 
   const toggleFavorite = (id: string) => {
     setFavoriteIds((prev) => {
@@ -137,12 +171,8 @@ export default function ContestPage() {
                       </button>
                     </div>
                   </div>
-
-                  <h3 className="font-bold text-slate-800 mt-2 text-base leading-snug">
-                    {contest.name}
-                  </h3>
+                  <h3 className="font-bold text-slate-800 mt-2 text-base leading-snug">{contest.name}</h3>
                   <p className="text-sm text-slate-500 mt-0.5">{contest.organizer}</p>
-
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500">
                     <div className="flex items-center gap-1.5">
                       <Calendar size={12} className="text-slate-400" />
@@ -157,13 +187,11 @@ export default function ContestPage() {
                       <span>{contest.region}</span>
                     </div>
                   </div>
-
                   <p className="text-xs text-slate-500 mt-2 line-clamp-2">{contest.description}</p>
-
                   <div className="mt-3 flex items-center justify-between gap-2">
                     <span className="text-[10px] text-slate-400 flex items-center gap-1">
                       <ExternalLink size={10} />
-                      {contest.source === 'all-con' ? '올콘 (all-con.co.kr)' : '링커리어 (linkareer.com)'}
+                      {getSourceLabel(contest.source)}
                     </span>
                     {!isExpired && (
                       <button
@@ -212,7 +240,7 @@ export default function ContestPage() {
                 <span className="text-3xl">{meta.emoji}</span>
                 <div>
                   <p className="font-bold text-slate-800 text-sm">{region}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">공모전 {count}개</p>
+                  <p className="text-xs text-slate-500 mt-0.5">공모전 {count}개+</p>
                 </div>
               </button>
             )
@@ -252,23 +280,16 @@ export default function ContestPage() {
             </div>
           </div>
 
-          {/* 공모전 목록 */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-semibold text-slate-600">
-                {selectedRegion} · {selectedCategory === '전체' ? '전체 분야' : selectedCategory}
-                <span className="ml-2 text-primary font-bold">{filteredContests.length}개</span>
-              </p>
-              <p className="text-xs text-slate-400">마감일 기준 정렬</p>
-            </div>
-
-            {filteredContests.length === 0 ? (
-              <div className="text-center py-12 text-slate-400">
-                <Trophy size={40} className="mx-auto mb-3 opacity-30" />
-                <p className="font-medium">해당 분야의 공모전이 없습니다</p>
-                <p className="text-sm mt-1">다른 분야를 선택해보세요</p>
+          {/* ── 정적 공모전 목록 ── */}
+          {filteredContests.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold text-slate-600">
+                  {selectedRegion} · {selectedCategory === '전체' ? '전체 분야' : selectedCategory}
+                  <span className="ml-2 text-primary font-bold">{filteredContests.length}개</span>
+                </p>
+                <p className="text-xs text-slate-400">마감일 기준 정렬</p>
               </div>
-            ) : (
               <div className="space-y-3">
                 {filteredContests.map((contest) => {
                   const daysLeft = getDaysUntilDeadline(contest.deadline)
@@ -278,11 +299,7 @@ export default function ContestPage() {
                   const isFav = favoriteIds.has(contest.id)
 
                   return (
-                    <div
-                      key={contest.id}
-                      className="card p-4 hover:shadow-md transition-shadow"
-                    >
-                      {/* 헤더 */}
+                    <div key={contest.id} className="card p-4 hover:shadow-md transition-shadow">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex flex-wrap gap-1.5">
                           <span
@@ -320,14 +337,8 @@ export default function ContestPage() {
                           </button>
                         </div>
                       </div>
-
-                      {/* 공모전명 */}
-                      <h3 className="font-bold text-slate-800 mt-2 text-base leading-snug">
-                        {contest.name}
-                      </h3>
+                      <h3 className="font-bold text-slate-800 mt-2 text-base leading-snug">{contest.name}</h3>
                       <p className="text-sm text-slate-500 mt-0.5">{contest.organizer}</p>
-
-                      {/* 상세 정보 */}
                       <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500">
                         <div className="flex items-center gap-1.5">
                           <Calendar size={12} className="text-slate-400" />
@@ -342,15 +353,11 @@ export default function ContestPage() {
                           <span>{contest.region}</span>
                         </div>
                       </div>
-
-                      {/* 설명 */}
                       <p className="text-xs text-slate-500 mt-2 line-clamp-2">{contest.description}</p>
-
-                      {/* 출처 & 팀원 모집 버튼 */}
                       <div className="mt-3 flex items-center justify-between gap-2">
                         <span className="text-[10px] text-slate-400 flex items-center gap-1">
                           <ExternalLink size={10} />
-                          {contest.source === 'all-con' ? '올콘 (all-con.co.kr)' : '링커리어 (linkareer.com)'}
+                          {getSourceLabel(contest.source)}
                         </span>
                         {!isExpired && (
                           <button
@@ -365,6 +372,128 @@ export default function ContestPage() {
                             팀원 모집
                           </button>
                         )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {filteredContests.length === 0 && !loadingDb && filteredDbContests.length === 0 && (
+            <div className="text-center py-12 text-slate-400">
+              <Trophy size={40} className="mx-auto mb-3 opacity-30" />
+              <p className="font-medium">해당 분야의 공모전이 없습니다</p>
+              <p className="text-sm mt-1">다른 분야를 선택해보세요</p>
+            </div>
+          )}
+
+          {/* ── 자동 수집 공모전 (DB) ── */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <p className="text-sm font-semibold text-slate-600">🤖 자동 수집 공모전</p>
+              {loadingDb && <Loader2 size={14} className="animate-spin text-slate-400" />}
+              {!loadingDb && (
+                <span className="text-xs text-slate-400">
+                  ({filteredDbContests.length}건)
+                </span>
+              )}
+            </div>
+
+            {!loadingDb && filteredDbContests.length === 0 && (
+              <div className="bg-slate-50 rounded-2xl p-5 text-center text-sm text-slate-400">
+                <p>수집된 공모전이 없습니다.</p>
+                <p className="text-xs mt-1">크롤러가 매일 자동으로 새 공모전을 수집합니다.</p>
+              </div>
+            )}
+
+            {filteredDbContests.length > 0 && (
+              <div className="space-y-3">
+                {filteredDbContests.map((c) => {
+                  const daysLeft = getDaysUntilDeadline(c.end_date)
+                  const isUrgent = daysLeft >= 0 && daysLeft <= 7
+                  const isExpired = daysLeft < 0
+                  const catKey = FIELD_CATEGORY_MAP[c.field] ?? '환경/사회'
+                  const colors = CATEGORY_COLORS[catKey]
+
+                  return (
+                    <div key={c.id} className="card p-4 hover:shadow-md transition-shadow">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          <span
+                            className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                            style={{ backgroundColor: colors.bg, color: colors.color }}
+                          >
+                            {catKey}
+                          </span>
+                          <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">
+                            {c.region}
+                          </span>
+                        </div>
+                        <span
+                          className={`text-xs font-bold whitespace-nowrap px-2.5 py-1 rounded-full ${
+                            isExpired
+                              ? 'bg-slate-100 text-slate-400'
+                              : isUrgent
+                              ? 'bg-red-100 text-red-600'
+                              : 'bg-green-100 text-green-700'
+                          }`}
+                        >
+                          {isExpired ? '마감' : `D-${daysLeft}`}
+                        </span>
+                      </div>
+
+                      <h3 className="font-bold text-slate-800 mt-2 text-base leading-snug">{c.title}</h3>
+                      {c.organizer && <p className="text-sm text-slate-500 mt-0.5">{c.organizer}</p>}
+
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar size={12} className="text-slate-400" />
+                          <span>마감: <strong className="text-slate-700">{c.end_date}</strong></span>
+                        </div>
+                        {c.max_participants && (
+                          <div className="flex items-center gap-1.5">
+                            <Users size={12} className="text-slate-400" />
+                            <span>최대 <strong className="text-slate-700">{c.max_participants}명</strong></span>
+                          </div>
+                        )}
+                      </div>
+
+                      {c.summary && (
+                        <p className="text-xs text-slate-500 mt-2 bg-slate-50 rounded-lg px-3 py-2 leading-relaxed">
+                          ✨ {c.summary}
+                        </p>
+                      )}
+
+                      <div className="mt-3 flex items-center justify-between gap-2">
+                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                          <ExternalLink size={10} />
+                          {getSourceLabel(c.source)}
+                        </span>
+                        <div className="flex gap-2">
+                          <a
+                            href={c.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-200 transition-colors"
+                          >
+                            <ExternalLink size={10} />
+                            공모전 보기
+                          </a>
+                          {!isExpired && (
+                            <button
+                              onClick={() =>
+                                router.push(
+                                  `/contest/write?name=${encodeURIComponent(c.title)}&category=${encodeURIComponent(catKey)}&region=${encodeURIComponent(c.region)}&deadline=${c.end_date}`
+                                )
+                              }
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500 text-white text-xs font-semibold rounded-lg hover:bg-yellow-600 transition-colors"
+                            >
+                              <Users size={11} />
+                              팀원 모집
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )
