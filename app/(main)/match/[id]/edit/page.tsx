@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { PageSpinner } from '@/components/ui/Spinner'
 import toast from 'react-hot-toast'
 
-const sports: Sport[] = ['축구', '풋살', '농구', 'e스포츠']
+const sports: Sport[] = ['축구', '풋살', '농구', 'e스포츠', '테니스']
 const allSizes: MatchSize[] = ['1vs1', '3vs3', '5vs5', '11vs11']
 const levels: SkillLevel[] = ['초급', '중급', '고수']
 

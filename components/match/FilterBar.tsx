@@ -11,7 +11,7 @@ interface FilterBarProps {
   onLevelChange: (level: SkillLevel | 'all') => void
 }
 
-const sports: (Sport | 'all')[] = ['all', '축구', '풋살', '농구', 'e스포츠']
+const sports: (Sport | 'all')[] = ['all', '축구', '풋살', '농구', 'e스포츠', '테니스']
 const levels: (SkillLevel | 'all')[] = ['all', '초급', '중급', '고수']
 
 export function FilterBar({ selectedSport, selectedLevel, onSportChange, onLevelChange }: FilterBarProps) {

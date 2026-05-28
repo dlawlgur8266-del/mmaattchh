@@ -8,7 +8,7 @@ import type { Sport, SkillLevel, MatchSize } from '@/types/database'
 import { CONTEST_CATEGORIES, type ContestCategory } from '@/data/contests'
 import toast from 'react-hot-toast'
 
-const sports: Sport[] = ['축구', '풋살', '농구', 'e스포츠']
+const sports: Sport[] = ['축구', '풋살', '농구', 'e스포츠', '테니스']
 const allSizes: MatchSize[] = ['1vs1', '3vs3', '5vs5', '11vs11']
 const levels: SkillLevel[] = ['초급', '중급', '고수']
 const REGIONS = ['충청북도', '충청남도', '세종특별자치시', '대전광역시']

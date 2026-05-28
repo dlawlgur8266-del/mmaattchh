@@ -1,5 +1,5 @@
 export type SkillLevel = '초급' | '중급' | '고수'
-export type Sport = '축구' | '풋살' | '농구' | 'e스포츠'
+export type Sport = '축구' | '풋살' | '농구' | 'e스포츠' | '테니스'
 export type MatchSize = '1vs1' | '3vs3' | '5vs5' | '11vs11'
 export type MatchStatus = '모집중' | '매치확정' | '취소됨'
 export type ApplicationStatus = 'pending' | 'accepted' | 'rejected'
@@ -278,6 +278,7 @@ export const SPORT_META: Record<Sport, { emoji: string; color: string; bgColor: 
   '풋살': { emoji: '🥅', color: '#2563EB', bgColor: '#DBEAFE' },
   '농구': { emoji: '🏀', color: '#EA580C', bgColor: '#FFEDD5' },
   'e스포츠': { emoji: '🎮', color: '#7C3AED', bgColor: '#EDE9FE' },
+  '테니스': { emoji: '🎾', color: '#0891B2', bgColor: '#CFFAFE' },
 }
 
 export const LEVEL_META: Record<SkillLevel, { color: string; bgColor: string }> = {
@@ -291,4 +292,5 @@ export const SPORT_ALLOWED_SIZES: Record<Sport, MatchSize[]> = {
   '풋살': ['3vs3', '5vs5'],
   '농구': ['3vs3', '5vs5'],
   'e스포츠': ['1vs1', '3vs3', '5vs5'],
+  '테니스': ['1vs1', '3vs3'],
 }
