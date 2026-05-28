@@ -17,7 +17,7 @@ interface Application {
 
 interface Props {
   matchId: string
-  onAccepted: () => void   // 수락 시 부모 카드의 상태(마감) 업데이트
+  onAccepted: () => void
 }
 
 export function PendingApplications({ matchId, onAccepted }: Props) {
@@ -25,7 +25,6 @@ export function PendingApplications({ matchId, onAccepted }: Props) {
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const supabase = createClient()
 
-  // 대기 중인 신청 목록 가져오기
   const fetchApplications = useCallback(async () => {
     const { data } = await supabase
       .from('match_applications')
@@ -49,43 +48,28 @@ export function PendingApplications({ matchId, onAccepted }: Props) {
   useEffect(() => {
     fetchApplications()
 
-    // Realtime 구독 — match_applications INSERT
     const channel = supabase
       .channel(`pending-apps:${matchId}`)
       .on(
         'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'match_applications',
-          filter: `match_id=eq.${matchId}`,
-        },
+        { event: 'INSERT', schema: 'public', table: 'match_applications', filter: `match_id=eq.${matchId}` },
         async (payload) => {
           const newApp = payload.new as { id: string; applicant_id: string; status: string }
           if (newApp.status !== 'pending') return
-
-          // 신청자 프로필 조회
           const { data: applicant } = await supabase
             .from('profiles')
             .select('nickname, skill_level')
             .eq('id', newApp.applicant_id)
             .single()
-
           setApplications((prev) => {
-            // 중복 방지
             if (prev.some((a) => a.id === newApp.id)) return prev
-            return [
-              ...prev,
-              { id: newApp.id, applicant_id: newApp.applicant_id, applicant: applicant || undefined },
-            ]
+            return [...prev, { id: newApp.id, applicant_id: newApp.applicant_id, applicant: applicant || undefined }]
           })
         }
       )
       .subscribe()
 
-    // 30초 폴링 폴백 (Realtime 미활성화 환경 대비)
     const polling = setInterval(fetchApplications, 30000)
-
     return () => {
       supabase.removeChannel(channel)
       clearInterval(polling)
@@ -99,8 +83,8 @@ export function PendingApplications({ matchId, onAccepted }: Props) {
       const data = await res.json()
       if (res.ok) {
         toast.success('✅ 매치를 수락했습니다! 채팅방이 생성되었어요.')
-        setApplications([])   // 매치 마감 → 신청 목록 초기화
-        onAccepted()           // 부모 카드에 마감 상태 반영
+        setApplications([])
+        onAccepted()
       } else {
         toast.error(data.error || '수락에 실패했습니다.')
       }
@@ -126,13 +110,13 @@ export function PendingApplications({ matchId, onAccepted }: Props) {
   }
 
   return (
-    <div className="mt-3 border-t border-slate-100 pt-3 space-y-2">
+    <div className="mt-3 border-t border-slate-100 pt-3 space-y-2.5">
       {/* 헤더 */}
       <div className="flex items-center justify-between">
-        <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+        <p className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
           신청 현황
           {applications.length > 0 && (
-            <span className="ml-1.5 px-1.5 py-0.5 bg-accent text-white rounded-full text-[10px]">
+            <span className="px-1.5 py-0.5 bg-accent text-white rounded-full text-[10px]">
               {applications.length}
             </span>
           )}
@@ -148,48 +132,49 @@ export function PendingApplications({ matchId, onAccepted }: Props) {
 
       {/* 신청 목록 */}
       {applications.length === 0 ? (
-        <p className="text-xs text-slate-400 text-center py-2">아직 신청이 없습니다</p>
+        <p className="text-xs text-slate-400 text-center py-3">아직 신청이 없습니다</p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {applications.map((app) => (
             <div
               key={app.id}
-              className="flex items-center justify-between bg-slate-50 rounded-xl p-2.5 gap-2"
+              className="bg-slate-50 rounded-2xl p-4 border border-slate-100"
             >
               {/* 신청자 정보 */}
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-7 h-7 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-                  <User size={13} className="text-primary" />
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                  <User size={18} className="text-primary" />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-700 truncate">
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-slate-800 text-sm">
                     {app.applicant?.nickname ?? '알 수 없음'}
                   </p>
-                  <p className="text-xs text-slate-400">
-                    실력: <span className="font-medium text-slate-600">{app.applicant?.skill_level ?? '-'}</span>
-                  </p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-xs text-slate-400">실력</span>
+                    <LevelBadge level={(app.applicant?.skill_level ?? '중급') as any} />
+                  </div>
                 </div>
               </div>
 
               {/* 수락 / 거절 버튼 */}
-              <div className="flex gap-1.5 flex-shrink-0">
+              <div className="flex gap-2">
                 <button
                   onClick={() => handleAccept(app)}
                   disabled={!!loadingId}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-green-500 text-white text-xs font-semibold rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50"
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-green-500 text-white text-sm font-semibold rounded-xl hover:bg-green-600 transition-colors disabled:opacity-50"
                 >
                   {loadingId === app.id ? (
-                    <div className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                   ) : (
-                    <><Check size={11} /> 신청 수락</>
+                    <><Check size={15} /> 신청 수락</>
                   )}
                 </button>
                 <button
                   onClick={() => handleReject(app)}
                   disabled={!!loadingId}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50"
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-500 text-white text-sm font-semibold rounded-xl hover:bg-red-600 transition-colors disabled:opacity-50"
                 >
-                  <X size={11} /> 신청 거절
+                  <X size={15} /> 신청 거절
                 </button>
               </div>
             </div>

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Pencil, Check, X, User, Trash2, Edit2, MapPin, Users,
-  CalendarDays, Trophy, XCircle, Clock,
+  CalendarDays, Trophy, XCircle, Clock, Inbox, Send,
 } from 'lucide-react'
 import { StarRating } from '@/components/review/StarRating'
 import { SportBadge, LevelBadge, StatusBadge } from '@/components/ui/Badge'
@@ -32,7 +32,27 @@ interface EditMatchForm {
   matchTime: string
 }
 
-type TabType = '내 매치글' | '내 경기' | '내 공모전' | '캘린더' | '매너 평가'
+interface ReceivedApplication {
+  id: string
+  applicant_id: string
+  match_id: string
+  nickname: string
+  skill_level: string
+  teamName: string
+  sport: string
+}
+
+interface SubmittedApplication {
+  id: string
+  match_id: string
+  status: 'pending' | 'accepted' | 'rejected'
+  created_at: string
+  teamName: string
+  sport: string
+  matchStatus: string
+}
+
+type TabType = '내 매치글' | '받은 신청' | '지원한 신청' | '내 경기' | '내 공모전' | '캘린더' | '매너 평가'
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -61,6 +81,13 @@ export default function ProfilePage() {
   // 내 경기 (확정된 매치)
   const [myConfirmedMatches, setMyConfirmedMatches] = useState<MyMatch[]>([])
   const [cancellingId, setCancellingId] = useState<string | null>(null)
+
+  // 받은 신청 / 지원한 신청
+  const [receivedApps, setReceivedApps] = useState<ReceivedApplication[]>([])
+  const [submittedApps, setSubmittedApps] = useState<SubmittedApplication[]>([])
+  const [acceptingId, setAcceptingId] = useState<string | null>(null)
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
+  const [withdrawingId, setWithdrawingId] = useState<string | null>(null)
 
   // 내 공모전
   const [myContestEvents, setMyContestEvents] = useState<ContestEvent[]>([])
@@ -228,6 +255,69 @@ export default function ProfilePage() {
     setMyContestEvents(events)
   }, [supabase])
 
+  // ────────────── 받은 신청 로드 ──────────────
+  const loadReceivedApps = useCallback(async (userId: string) => {
+    // 내 매치 ID 목록
+    const { data: myMatches } = await supabase
+      .from('matches')
+      .select('id, team_name, sport')
+      .eq('author_id', userId)
+      .eq('status', '모집중')
+
+    if (!myMatches || myMatches.length === 0) { setReceivedApps([]); return }
+
+    const matchIds = myMatches.map((m: any) => m.id)
+    const matchMap: Record<string, { teamName: string; sport: string }> = {}
+    myMatches.forEach((m: any) => { matchMap[m.id] = { teamName: m.team_name, sport: m.sport } })
+
+    const { data: apps } = await supabase
+      .from('match_applications')
+      .select('id, applicant_id, match_id, applicant:profiles!match_applications_applicant_id_fkey(nickname, skill_level)')
+      .in('match_id', matchIds)
+      .eq('status', 'pending')
+
+    if (apps) {
+      setReceivedApps(apps.map((a: any) => {
+        const applicant = Array.isArray(a.applicant) ? a.applicant[0] : a.applicant
+        const matchInfo = matchMap[a.match_id] || { teamName: '알 수 없음', sport: '축구' }
+        return {
+          id: a.id,
+          applicant_id: a.applicant_id,
+          match_id: a.match_id,
+          nickname: applicant?.nickname || '알 수 없음',
+          skill_level: applicant?.skill_level || '-',
+          teamName: matchInfo.teamName,
+          sport: matchInfo.sport,
+        }
+      }))
+    }
+  }, [supabase])
+
+  // ────────────── 지원한 신청 로드 ──────────────
+  const loadSubmittedApps = useCallback(async (userId: string) => {
+    const { data: apps } = await supabase
+      .from('match_applications')
+      .select('id, match_id, status, created_at, match:matches!match_applications_match_id_fkey(id, team_name, sport, status)')
+      .eq('applicant_id', userId)
+      .neq('status', 'rejected')
+      .order('created_at', { ascending: false })
+
+    if (apps) {
+      setSubmittedApps(apps.map((a: any) => {
+        const m = Array.isArray(a.match) ? a.match[0] : a.match
+        return {
+          id: a.id,
+          match_id: a.match_id,
+          status: a.status,
+          created_at: a.created_at,
+          teamName: m?.team_name || '알 수 없음',
+          sport: m?.sport || '-',
+          matchStatus: m?.status || '-',
+        }
+      }))
+    }
+  }, [supabase])
+
   // ────────────── 초기 데이터 로드 ──────────────
   useEffect(() => {
     const load = async () => {
@@ -258,11 +348,23 @@ export default function ProfilePage() {
       await Promise.all([
         loadMyConfirmedMatches(user.id),
         loadMyContests(user.id),
+        loadReceivedApps(user.id),
+        loadSubmittedApps(user.id),
       ])
       setLoading(false)
     }
     load()
-  }, [supabase, loadMyConfirmedMatches, loadMyContests])
+  }, [supabase, loadMyConfirmedMatches, loadMyContests, loadReceivedApps, loadSubmittedApps])
+
+  // ────────────── 받은 신청 실시간 폴링 (10초) ──────────────
+  useEffect(() => {
+    if (!profile?.id) return
+    const interval = setInterval(() => {
+      loadReceivedApps(profile.id)
+      loadSubmittedApps(profile.id)
+    }, 10000)
+    return () => clearInterval(interval)
+  }, [profile?.id, loadReceivedApps, loadSubmittedApps])
 
   // ────────────── 닉네임 저장 ──────────────
   const saveNickname = async () => {
@@ -373,6 +475,49 @@ export default function ProfilePage() {
     }
   }
 
+  // ────────────── 받은 신청 수락 ──────────────
+  const handleAcceptApp = async (appId: string, matchId: string) => {
+    setAcceptingId(appId)
+    try {
+      const res = await fetch(`/api/applications/${appId}/accept`, { method: 'PATCH' })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || '수락에 실패했습니다.'); return }
+      toast.success('✅ 매치를 수락했습니다! 채팅방이 생성되었어요.')
+      setReceivedApps((prev) => prev.filter((a) => a.match_id !== matchId))
+    } finally {
+      setAcceptingId(null)
+    }
+  }
+
+  // ────────────── 받은 신청 거절 ──────────────
+  const handleRejectApp = async (appId: string) => {
+    setRejectingId(appId)
+    try {
+      const res = await fetch(`/api/applications/${appId}/reject`, { method: 'PATCH' })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || '거절에 실패했습니다.'); return }
+      toast.success('신청을 거절했습니다.')
+      setReceivedApps((prev) => prev.filter((a) => a.id !== appId))
+    } finally {
+      setRejectingId(null)
+    }
+  }
+
+  // ────────────── 지원한 신청 취소 ──────────────
+  const handleWithdrawApp = async (appId: string, matchId: string) => {
+    if (!window.confirm('신청을 취소하시겠습니까?')) return
+    setWithdrawingId(appId)
+    try {
+      const res = await fetch(`/api/applications/${appId}/withdraw`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || '취소에 실패했습니다.'); return }
+      toast.success('신청이 취소되었습니다. 매치글이 다시 모집 중으로 표시됩니다.')
+      setSubmittedApps((prev) => prev.filter((a) => a.id !== appId))
+    } finally {
+      setWithdrawingId(null)
+    }
+  }
+
   // ────────────── 매치 취소 ──────────────
   const handleCancelMatch = async (matchId: string) => {
     if (!window.confirm('매치를 취소하시겠습니까? 상대방에게 알림이 전송됩니다.')) return
@@ -396,7 +541,7 @@ export default function ProfilePage() {
   const allSizes: MatchSize[] = ['1vs1', '3vs3', '5vs5', '11vs11']
   const allowedSizes = editForm.sport ? SPORT_ALLOWED_SIZES[editForm.sport as Sport] : allSizes
 
-  const tabs: TabType[] = ['내 매치글', '내 경기', '내 공모전', '캘린더', '매너 평가']
+  const tabs: TabType[] = ['내 매치글', '받은 신청', '지원한 신청', '내 경기', '내 공모전', '캘린더', '매너 평가']
 
   return (
     <div className="space-y-5 max-w-xl">
@@ -515,19 +660,25 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* ── 탭 네비게이션 ── */}
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+      {/* ── 탭 네비게이션 (스크롤) ── */}
+      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto scrollbar-hide">
         {tabs.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+            className={`whitespace-nowrap flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
               activeTab === tab
                 ? 'bg-white text-primary shadow-sm'
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             {tab}
+            {tab === '받은 신청' && receivedApps.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 bg-accent text-white rounded-full text-[9px]">{receivedApps.length}</span>
+            )}
+            {tab === '지원한 신청' && submittedApps.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 bg-slate-400 text-white rounded-full text-[9px]">{submittedApps.length}</span>
+            )}
           </button>
         ))}
       </div>
@@ -582,6 +733,162 @@ export default function ProfilePage() {
                         <Trash2 size={15} />
                       </button>
                     </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 받은 신청 */}
+      {activeTab === '받은 신청' && (
+        <div className="card p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Inbox size={18} className="text-accent" />
+              <h2 className="font-bold text-slate-800">받은 신청</h2>
+            </div>
+            <span className="text-sm text-slate-400 bg-slate-100 px-2.5 py-0.5 rounded-full">
+              {receivedApps.length}개
+            </span>
+          </div>
+          <p className="text-xs text-slate-400">내 모집 중인 매치글에 들어온 신청입니다. 실시간으로 갱신됩니다.</p>
+
+          {receivedApps.length === 0 ? (
+            <div className="text-center py-8 space-y-2">
+              <Inbox size={32} className="text-slate-200 mx-auto" />
+              <p className="text-slate-400 text-sm">받은 신청이 없습니다</p>
+              <p className="text-slate-300 text-xs">매치글에 신청이 들어오면 여기에 표시됩니다</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {receivedApps.map((app) => {
+                const meta = SPORT_META[app.sport as keyof typeof SPORT_META]
+                const isProcessing = acceptingId === app.id || rejectingId === app.id
+                return (
+                  <div key={app.id} className="rounded-2xl p-4 bg-slate-50 border border-slate-100">
+                    {/* 매치 정보 */}
+                    <div className="flex items-center gap-2 mb-3 pb-3 border-b border-slate-100">
+                      <span className="text-lg">{meta?.emoji}</span>
+                      <div>
+                        <p className="text-xs text-slate-400">신청 매치</p>
+                        <p className="text-sm font-bold text-slate-700">{app.teamName}</p>
+                      </div>
+                    </div>
+                    {/* 신청자 정보 */}
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-11 h-11 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                        <User size={20} className="text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-bold text-slate-800">{app.nickname}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          실력: <span className="font-semibold text-slate-600">{app.skill_level}</span>
+                        </p>
+                      </div>
+                    </div>
+                    {/* 수락/거절 버튼 */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleAcceptApp(app.id, app.match_id)}
+                        disabled={isProcessing}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-green-500 text-white text-sm font-semibold rounded-xl hover:bg-green-600 transition-colors disabled:opacity-50"
+                      >
+                        {acceptingId === app.id ? (
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (
+                          <><Check size={15} /> 신청 수락</>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleRejectApp(app.id)}
+                        disabled={isProcessing}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-500 text-white text-sm font-semibold rounded-xl hover:bg-red-600 transition-colors disabled:opacity-50"
+                      >
+                        {rejectingId === app.id ? (
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (
+                          <><X size={15} /> 신청 거절</>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 지원한 신청 */}
+      {activeTab === '지원한 신청' && (
+        <div className="card p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Send size={18} className="text-primary" />
+              <h2 className="font-bold text-slate-800">지원한 신청</h2>
+            </div>
+            <span className="text-sm text-slate-400 bg-slate-100 px-2.5 py-0.5 rounded-full">
+              {submittedApps.length}개
+            </span>
+          </div>
+          <p className="text-xs text-slate-400">내가 신청한 매치 목록입니다. 대기 중인 신청은 취소할 수 있습니다.</p>
+
+          {submittedApps.length === 0 ? (
+            <div className="text-center py-8 space-y-2">
+              <Send size={32} className="text-slate-200 mx-auto" />
+              <p className="text-slate-400 text-sm">신청한 매치가 없습니다</p>
+              <p className="text-slate-300 text-xs">매치에 신청하면 여기에 표시됩니다</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {submittedApps.map((app) => {
+                const meta = SPORT_META[app.sport as keyof typeof SPORT_META]
+                const statusLabel =
+                  app.status === 'pending' ? '검토 중' :
+                  app.status === 'accepted' ? '수락됨' : '거절됨'
+                const statusColor =
+                  app.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                  app.status === 'accepted' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'
+                return (
+                  <div key={app.id} className="rounded-2xl p-4 bg-slate-50 border border-slate-100">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div
+                          className="w-11 h-11 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
+                          style={{ backgroundColor: meta?.bgColor || '#F1F5F9' }}
+                        >
+                          {meta?.emoji}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-slate-800 text-sm truncate">{app.teamName}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">{app.sport}</p>
+                        </div>
+                      </div>
+                      <span className={`text-xs px-2.5 py-1 rounded-full font-semibold shrink-0 ${statusColor}`}>
+                        {statusLabel}
+                      </span>
+                    </div>
+
+                    {app.status === 'pending' && (
+                      <button
+                        onClick={() => handleWithdrawApp(app.id, app.match_id)}
+                        disabled={withdrawingId === app.id}
+                        className="mt-3 w-full flex items-center justify-center gap-1.5 py-2 border border-red-200 text-red-500 text-sm font-semibold rounded-xl hover:bg-red-50 transition-colors disabled:opacity-50"
+                      >
+                        {withdrawingId === app.id ? (
+                          <div className="w-4 h-4 border-2 border-red-400/30 border-t-red-500 rounded-full animate-spin" />
+                        ) : (
+                          <><XCircle size={14} /> 신청 취소</>
+                        )}
+                      </button>
+                    )}
+                    {app.status === 'accepted' && (
+                      <p className="mt-2 text-xs text-green-600 font-medium text-center">
+                        🎉 수락되었습니다! 메시지에서 채팅방을 확인하세요
+                      </p>
+                    )}
                   </div>
                 )
               })}
