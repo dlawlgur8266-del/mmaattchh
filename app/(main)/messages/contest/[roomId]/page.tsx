@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, use, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Send, Users, Trophy } from 'lucide-react'
+import { ArrowLeft, Send, Users, Trophy, UserPlus, LogOut, X, Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { PageSpinner } from '@/components/ui/Spinner'
 import toast from 'react-hot-toast'
@@ -21,19 +21,34 @@ interface Member {
   user?: { nickname: string }
 }
 
+interface Invitee {
+  userId: string
+  nickname: string
+}
+
 export default function ContestChatPage({ params }: { params: Promise<{ roomId: string }> }) {
   const { roomId } = use(params)
   const router = useRouter()
-  // 싱글턴 클라이언트
   const supabase = createClient()
 
   const [userId, setUserId] = useState<string | null>(null)
+  const [isAuthor, setIsAuthor] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [roomName, setRoomName] = useState('팀 채팅')
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+
+  // 초대 모달
+  const [showInvite, setShowInvite] = useState(false)
+  const [invitees, setInvitees] = useState<Invitee[]>([])
+  const [loadingInvitees, setLoadingInvitees] = useState(false)
+  const [invitingId, setInvitingId] = useState<string | null>(null)
+
+  // 나가기
+  const [leaving, setLeaving] = useState(false)
+
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const userIdRef = useRef<string | null>(null)
@@ -48,10 +63,7 @@ export default function ContestChatPage({ params }: { params: Promise<{ roomId: 
   // ─── 초기 데이터 로드 ───────────────────────────────────────
   const loadMessages = useCallback(async () => {
     const res = await fetch(`/api/contest-rooms/${roomId}/messages`)
-    if (res.ok) {
-      const msgs = await res.json()
-      setMessages(msgs)
-    }
+    if (res.ok) setMessages(await res.json())
   }, [roomId])
 
   useEffect(() => {
@@ -76,20 +88,25 @@ export default function ContestChatPage({ params }: { params: Promise<{ roomId: 
 
       const { data: room } = await supabase
         .from('contest_chat_rooms')
-        .select('name, contest_match:contest_matches!contest_chat_rooms_contest_match_id_fkey(contest_name)')
+        .select('name, contest_match:contest_matches!contest_chat_rooms_contest_match_id_fkey(contest_name, author_id)')
         .eq('id', roomId)
         .single()
 
       if (room) {
         const cm = room.contest_match as any
         setRoomName(cm?.contest_name || room.name || '팀 채팅')
+        // 팀장(게시글 작성자) 여부 확인
+        const currentUser = (await supabase.auth.getUser()).data.user
+        if (currentUser && cm?.author_id === currentUser.id) {
+          setIsAuthor(true)
+        }
       }
 
       setLoading(false)
     }
 
     load()
-  }, [roomId]) // supabase 싱글턴이므로 제거 가능
+  }, [roomId])
 
   // ─── Realtime 구독 + 폴링 폴백 ─────────────────────────────
   useEffect(() => {
@@ -120,7 +137,6 @@ export default function ContestChatPage({ params }: { params: Promise<{ roomId: 
         }
       })
 
-    // 폴링 폴백: 3초마다 최신 메시지 1건 확인
     let lastId = ''
     const poll = setInterval(async () => {
       const res = await fetch(`/api/contest-rooms/${roomId}/messages`)
@@ -147,6 +163,7 @@ export default function ContestChatPage({ params }: { params: Promise<{ roomId: 
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // ─── 메시지 전송 ────────────────────────────────────────────
   const handleSend = async () => {
     if (!input.trim() || sending) return
     const content = input
@@ -175,6 +192,75 @@ export default function ContestChatPage({ params }: { params: Promise<{ roomId: 
     }
   }
 
+  // ─── 팀원 초대 ───────────────────────────────────────────────
+  const openInviteModal = async () => {
+    setShowInvite(true)
+    setLoadingInvitees(true)
+    try {
+      const res = await fetch(`/api/contest-rooms/${roomId}/invite`)
+      if (!res.ok) {
+        const data = await res.json()
+        toast.error(data.error || '초대 목록을 불러오지 못했습니다.')
+        setShowInvite(false)
+        return
+      }
+      setInvitees(await res.json())
+    } finally {
+      setLoadingInvitees(false)
+    }
+  }
+
+  const handleInvite = async (targetUserId: string) => {
+    setInvitingId(targetUserId)
+    try {
+      const res = await fetch(`/api/contest-rooms/${roomId}/invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: targetUserId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || '초대에 실패했습니다.')
+        return
+      }
+      toast.success('팀원을 초대했습니다!')
+      setInvitees((prev) => prev.filter((p) => p.userId !== targetUserId))
+      // 멤버 목록 새로고침
+      const memberRes = await supabase
+        .from('contest_chat_members')
+        .select('user_id, user:profiles!contest_chat_members_user_id_fkey(nickname)')
+        .eq('room_id', roomId)
+      if (memberRes.data) {
+        setMembers(
+          memberRes.data.map((m) => ({
+            user_id: m.user_id,
+            user: Array.isArray(m.user) ? m.user[0] : (m.user ?? undefined),
+          }))
+        )
+      }
+    } finally {
+      setInvitingId(null)
+    }
+  }
+
+  // ─── 채팅방 나가기 ───────────────────────────────────────────
+  const handleLeave = async () => {
+    if (!window.confirm('팀 채팅방을 나가시겠습니까?\n나가도 채팅 내역은 팀원에게 유지됩니다.')) return
+    setLeaving(true)
+    try {
+      const res = await fetch(`/api/contest-rooms/${roomId}/leave`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json()
+        toast.error(data.error || '나가기에 실패했습니다.')
+        return
+      }
+      toast.success('채팅방을 나갔습니다.')
+      router.push('/messages?tab=contest')
+    } finally {
+      setLeaving(false)
+    }
+  }
+
   if (loading || !userId) return <PageSpinner />
 
   return (
@@ -199,7 +285,8 @@ export default function ContestChatPage({ params }: { params: Promise<{ roomId: 
             </p>
           </div>
         </div>
-        {/* 멤버 목록 */}
+
+        {/* 멤버 아바타 */}
         <div className="flex -space-x-1">
           {members.slice(0, 4).map((m) => (
             <div
@@ -211,6 +298,31 @@ export default function ContestChatPage({ params }: { params: Promise<{ roomId: 
             </div>
           ))}
         </div>
+
+        {/* 팀원 초대 버튼 (팀장만) */}
+        {isAuthor && (
+          <button
+            onClick={openInviteModal}
+            className="p-2 rounded-xl hover:bg-yellow-50 text-yellow-600 transition-colors flex-shrink-0"
+            title="팀원 초대하기"
+          >
+            <UserPlus size={18} />
+          </button>
+        )}
+
+        {/* 나가기 버튼 */}
+        <button
+          onClick={handleLeave}
+          disabled={leaving}
+          className="p-2 rounded-xl hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors flex-shrink-0"
+          title="채팅방 나가기"
+        >
+          {leaving ? (
+            <div className="w-[18px] h-[18px] border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+          ) : (
+            <LogOut size={18} />
+          )}
+        </button>
       </div>
 
       {/* Messages */}
@@ -281,6 +393,88 @@ export default function ContestChatPage({ params }: { params: Promise<{ roomId: 
           </button>
         </div>
       </div>
+
+      {/* ── 팀원 초대 모달 ────────────────────────────────────── */}
+      {showInvite && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl">
+            {/* 모달 헤더 */}
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <div>
+                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                  <UserPlus size={18} className="text-yellow-500" />
+                  팀원 초대하기
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  공모전 신청을 수락한 팀원만 초대할 수 있습니다
+                </p>
+              </div>
+              <button
+                onClick={() => setShowInvite(false)}
+                className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* 초대 목록 */}
+            <div className="p-4 max-h-72 overflow-y-auto">
+              {loadingInvitees ? (
+                <div className="flex justify-center py-8">
+                  <div className="w-6 h-6 border-2 border-slate-200 border-t-yellow-500 rounded-full animate-spin" />
+                </div>
+              ) : invitees.length === 0 ? (
+                <div className="text-center py-8">
+                  <Users size={32} className="mx-auto mb-2 text-slate-200" />
+                  <p className="text-sm text-slate-500 font-medium">초대 가능한 팀원이 없습니다</p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    수락된 신청자가 모두 채팅방에 있거나<br />아직 수락된 신청이 없습니다
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {invitees.map((person) => (
+                    <div
+                      key={person.userId}
+                      className="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 bg-yellow-100 rounded-full flex items-center justify-center text-yellow-700 font-bold text-sm">
+                          {person.nickname.charAt(0)}
+                        </div>
+                        <span className="font-medium text-slate-800 text-sm">{person.nickname}</span>
+                      </div>
+                      <button
+                        onClick={() => handleInvite(person.userId)}
+                        disabled={invitingId === person.userId}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500 text-white text-xs font-semibold rounded-lg hover:bg-yellow-600 disabled:opacity-50 transition-colors"
+                      >
+                        {invitingId === person.userId ? (
+                          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (
+                          <>
+                            <Check size={12} />
+                            초대
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 pt-0">
+              <button
+                onClick={() => setShowInvite(false)}
+                className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
