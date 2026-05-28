@@ -10,10 +10,13 @@ export async function GET(req: NextRequest) {
   const level = req.nextUrl.searchParams.get('level')
 
   // '모집중' 상태만 공개 목록에 노출 (확정된 매치는 내 정보에만 남음)
+  // 매치 날짜가 지난 게시물은 즉시 제외
+  const nowISO = new Date().toISOString()
   let query = supabase
     .from('matches')
     .select('*, author:profiles!matches_author_id_fkey(id,nickname,skill_level)')
     .eq('status', '모집중')
+    .or(`match_datetime.is.null,match_datetime.gte.${nowISO}`)
     .order('created_at', { ascending: false })
 
   if (sport) query = query.eq('sport', sport)
