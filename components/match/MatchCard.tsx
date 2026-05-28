@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Users, Zap, MapPin, Calendar, Clock } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Users, Zap, MapPin, Calendar, Clock, Edit2 } from 'lucide-react'
 import { SportBadge, LevelBadge, StatusBadge } from '@/components/ui/Badge'
 import { PendingApplications } from './PendingApplications'
 import { SPORT_META } from '@/types/database'
@@ -37,6 +38,7 @@ export function MatchCard({
   onApplied,
   onConfirmed,
 }: MatchCardProps) {
+  const router = useRouter()
   const [applied, setApplied] = useState(alreadyApplied)
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<MatchStatus>(match.status)
@@ -130,7 +132,18 @@ export function MatchCard({
           <div>
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-semibold text-slate-500">내 게시글</span>
-              <StatusBadge status={status} />
+              <div className="flex items-center gap-1">
+                {status === '모집중' && (
+                  <button
+                    onClick={() => router.push(`/match/${match.id}/edit`)}
+                    className="p-1.5 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                    title="매치글 수정"
+                  >
+                    <Edit2 size={13} />
+                  </button>
+                )}
+                <StatusBadge status={status} />
+              </div>
             </div>
             {status === '모집중' ? (
               <PendingApplications
