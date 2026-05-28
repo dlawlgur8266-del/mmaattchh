@@ -7,7 +7,7 @@ import { CONTEST_CATEGORIES, type ContestCategory } from '@/data/contests'
 import toast from 'react-hot-toast'
 import { Suspense } from 'react'
 
-const REGIONS = ['충청북도', '충청남도']
+const REGIONS = ['충청북도', '충청남도', '세종특별자치시', '대전광역시']
 const TEAM_SIZES = [1, 2, 3, 4, 5]
 
 function ContestWriteInner() {

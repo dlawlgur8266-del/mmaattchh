@@ -13,11 +13,13 @@ import {
 } from '@/data/contests'
 import { useRouter } from 'next/navigation'
 
-const REGIONS: ContestRegion[] = ['충청북도', '충청남도']
+const REGIONS: ContestRegion[] = ['충청북도', '충청남도', '세종특별자치시', '대전광역시']
 
 const REGION_META: Record<ContestRegion, { color: string; bg: string; emoji: string }> = {
-  충청북도: { color: '#1D4ED8', bg: '#DBEAFE', emoji: '🏔️' },
-  충청남도: { color: '#0F766E', bg: '#CCFBF1', emoji: '🌊' },
+  충청북도:    { color: '#1D4ED8', bg: '#DBEAFE', emoji: '🏔️' },
+  충청남도:    { color: '#0F766E', bg: '#CCFBF1', emoji: '🌊' },
+  세종특별자치시: { color: '#7C3AED', bg: '#EDE9FE', emoji: '🏛️' },
+  대전광역시:  { color: '#B45309', bg: '#FEF3C7', emoji: '⚗️' },
 }
 
 interface ExternalContest {
@@ -64,7 +66,7 @@ export default function ContestPage() {
             <Trophy className="text-yellow-500" size={24} />
             <h1 className="text-2xl font-bold text-slate-800">공모전</h1>
           </div>
-          <p className="text-slate-500 text-sm mt-0.5">충청북도·충청남도 공모전을 찾아보세요</p>
+          <p className="text-slate-500 text-sm mt-0.5">충청북도·충청남도·세종·대전 공모전을 찾아보세요</p>
         </div>
         <button
           onClick={() => router.push('/contest/write')}
@@ -381,7 +383,7 @@ export default function ContestPage() {
         <div className="text-center py-8 text-slate-400">
           <Trophy size={40} className="mx-auto mb-3 text-yellow-400 opacity-70" />
           <p className="font-semibold text-slate-600">지역을 선택해주세요</p>
-          <p className="text-sm mt-1">충청북도 또는 충청남도를 선택하면 공모전 목록이 표시됩니다</p>
+          <p className="text-sm mt-1">충청북도·충청남도·세종·대전 중 선택하면 공모전 목록이 표시됩니다</p>
         </div>
       )}
     </div>

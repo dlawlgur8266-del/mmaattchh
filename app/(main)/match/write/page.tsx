@@ -11,7 +11,7 @@ import toast from 'react-hot-toast'
 const sports: Sport[] = ['축구', '풋살', '농구', 'e스포츠']
 const allSizes: MatchSize[] = ['1vs1', '3vs3', '5vs5', '11vs11']
 const levels: SkillLevel[] = ['초급', '중급', '고수']
-const REGIONS = ['충청북도', '충청남도']
+const REGIONS = ['충청북도', '충청남도', '세종특별자치시', '대전광역시']
 const TEAM_SIZES = [1, 2, 3, 4, 5]
 
 type WriteMode = '스포츠' | '공모전'
