@@ -4,7 +4,7 @@
 > **최초 작성일**: 2026-05-26  
 > **최종 수정일**: 2026-05-28  
 > **작성자**: 충북match 개발팀  
-> **상태**: 업데이트 완료 (v2.0 → v2.1)
+> **상태**: 업데이트 완료 (v1.0 → v2.1)
 
 ---
 
@@ -12,9 +12,9 @@
 
 | 버전 | 날짜 | 주요 변경 내용 |
 |------|------|----------------|
-| v1.0 | 2026-05-26 | 초안 작성 (MVP 기능 정의) |
-| v2.0 | 2026-05-28 | 공모전 기능 확장, 그룹 채팅, 신청 관리 UI, 자동화 기능 전면 추가 |
-| v2.1 | 2026-05-28 | 매치글 수정 기능 추가 (전용 페이지 + 실시간 반영) |
+| v1.0 | 2026-05-26 | 초안 작성 — MVP 기능 정의 |
+| v2.0 | 2026-05-28 | 공모전 기능, 그룹 채팅, 신청 관리 UI, 자동화 전면 추가 |
+| v2.1 | 2026-05-28 | 매치글 수정 기능 추가 (전용 페이지 + Realtime 즉시 반영) |
 
 ---
 
@@ -51,17 +51,17 @@
 | 공모전 팀 매칭 | 충청권 공모전 정보 제공 + 팀원 모집·그룹 채팅 연동 |
 | 자동화 운영 | 마감일 기반 게시물 자동 만료·삭제로 운영 비용 최소화 |
 
-### 1.3 기술 스택 요약
+### 1.3 기술 스택
 
 | 구분 | 기술 | 선택 이유 |
 |------|------|-----------|
-| Frontend | Next.js 14 (App Router) | SSR/SSG 지원, Vercel 최적화 |
-| Styling | Tailwind CSS | 빠른 UI 구현, 일관된 디자인 |
+| Frontend | Next.js 14 (App Router, TypeScript) | SSR/SSG 지원, Vercel 최적화 |
+| Styling | Tailwind CSS | 빠른 UI 구현, 일관된 디자인 시스템 |
 | Database | Supabase (PostgreSQL) | 무료 플랜, Row Level Security, Realtime 내장 |
 | 인증 | Supabase Auth | 세션 관리, JWT 내장 |
-| 실시간 | Supabase Realtime | WebSocket 기반 실시간 구독 |
-| 배포 | Vercel | Next.js 공식 배포 플랫폼, Edge Network |
-| Cron | Vercel Cron Jobs | 매일 자동 동기화·만료 처리 |
+| 실시간 | Supabase Realtime (WebSocket) | Postgres Changes 구독, 폴링 폴백 병행 |
+| 배포 | Vercel | Next.js 공식 플랫폼, Edge Network, Cron Jobs |
+| Admin | Supabase Admin Client | RLS 우회 서버 사이드 작업 |
 
 ---
 
@@ -89,13 +89,13 @@
 
 ## 3. 사용자 페르소나
 
-### 페르소나 A — 매치 주최자 (매치글 작성자)
+### 페르소나 A — 매치 주최자
 
 > 충북대 체육학과 3학년 **김민준** (22세)
 >
 > - 주 2~3회 풋살을 즐기지만 상대팀 구하기가 어려움
 > - 카카오톡 오픈채팅방으로 상대 찾는 번거로움을 느낌
-> - **니즈**: 종목·수준에 맞는 상대를 빠르게 구하고 싶다
+> - **니즈**: 종목·수준에 맞는 상대를 빠르게 구하고, 경기 일정을 관리하고 싶다
 
 ### 페르소나 B — 매치 신청자
 
@@ -105,7 +105,7 @@
 > - 실력 수준이 맞는 상대를 찾고 싶음
 > - **니즈**: 내 실력 수준에 맞는 상대 팀을 필터로 찾고 바로 신청하고 싶다
 
-### 페르소나 C — 일반 사용자 (관전·평가 중심)
+### 페르소나 C — 일반 사용자 (평가 중심)
 
 > 충북대 경영학과 1학년 **박지호** (19세)
 >
@@ -113,7 +113,7 @@
 > - 상대팀의 매너 점수를 보고 신청 여부를 결정하고 싶음
 > - **니즈**: 매너 평가 이력을 보고 신뢰할 수 있는 상대와 경기하고 싶다
 
-### 페르소나 D — 공모전 팀 빌더 (신규)
+### 페르소나 D — 공모전 팀 빌더
 
 > 충북대 디자인학과 3학년 **최유진** (21세)
 >
@@ -128,30 +128,29 @@
 ```
 충북match
 ├── 공개 영역 (비로그인)
-│   ├── /                      ← 랜딩 페이지 (서비스 소개)
-│   ├── /login                 ← 로그인
-│   └── /signup                ← 회원가입
+│   ├── /                          ← 랜딩 페이지 (서비스 소개)
+│   ├── /login                     ← 로그인
+│   └── /signup                    ← 회원가입 (학과 선택 포함)
 │
 └── 인증 영역 (로그인 필수)
-    ├── /match                 ← 매치 목록 (메인)
-    ├── /match/write           ← 매치글 작성
-    ├── /match/[id]            ← 매치 상세
-    ├── /contest               ← 공모전 목록 (지역별 + 즐겨찾기)
-    ├── /contest/matches       ← 공모전 팀원 모집 목록
-    ├── /contest/write         ← 공모전 팀원 모집 작성
-    ├── /review                ← 팀 후기 목록 / 작성
-    ├── /messages              ← 메시지 허브 (1:1 매치 채팅 + 공모전 그룹 채팅)
-    ├── /messages/[roomId]     ← 1:1 매치 채팅방
-    ├── /messages/contest/[roomId] ← 공모전 팀 그룹 채팅방
-    ├── /profile               ← 내 정보
-    └── /notifications         ← 알림 센터
+    ├── /match                     ← 매치 목록 (종목·수준 필터, 실시간)
+    ├── /match/write               ← 매치글 작성 (스포츠 / 공모전 탭 모드)
+    ├── /match/[id]/edit           ← 매치글 수정 (작성자 전용) ← v2.1 신규
+    ├── /contest                   ← 공모전 목록 (즐겨찾기 + 지역별 탭)
+    ├── /contest/matches           ← 공모전 팀원 모집 목록 (실시간 남은 자리)
+    ├── /review                    ← 팀 후기 목록 / 별점 작성
+    ├── /messages                  ← 메시지 허브 (매치 채팅 탭 / 공모전 팀 채팅 탭)
+    ├── /messages/[roomId]         ← 1:1 매치 채팅방
+    ├── /messages/contest/[roomId] ← 공모전 팀 그룹 채팅방 (팀원 초대 포함)
+    ├── /profile                   ← 내 정보 (7개 탭)
+    └── /notifications             ← 알림 센터
 ```
 
 ---
 
 ## 5. 기능 요구사항 상세
 
-### 5.1 회원가입
+### 5.1 회원가입 (/signup)
 
 #### 유저 스토리
 > "충북대 재학생으로서, 내 학번으로 가입하여 신뢰할 수 있는 스포츠 커뮤니티에 참여하고 싶다."
@@ -165,15 +164,15 @@
 | 비밀번호 확인 | password | 비밀번호와 일치 | "비밀번호가 일치하지 않습니다." |
 | 이름(실명) | text | 한글 2~5자 | "올바른 이름을 입력해 주세요." |
 | 닉네임 | text | 2~10자, 중복 불가 | "이미 사용 중인 닉네임입니다." |
-| 학번 | text | 숫자 8자리 정확히, maxLength=8 | "학번은 8자리 숫자여야 합니다." |
+| 학번 | text | 숫자 8자리, maxLength=8 | "학번은 8자리 숫자여야 합니다." |
 | 소속 학과 | select | 충북대 학과 목록 선택 | "학과를 선택해주세요." |
 
 #### 학번 유효성 검증 규칙
 
 ```
-형식: YYYY0000 (앞 4자리: 입학연도, 뒤 4자리: 학번)
+형식: YYYY0000 (앞 4자리: 입학연도, 뒤 4자리: 일련번호)
 - 입학연도: 1990 ~ 현재연도 범위
-- 숫자 외 문자 입력 불가 (input type="number" 또는 pattern="[0-9]{8}")
+- 숫자 외 문자 입력 불가 (input type="number", pattern="[0-9]{8}")
 - maxLength 속성으로 8자리 초과 입력 차단
 ```
 
@@ -184,14 +183,14 @@
 2. 클라이언트 유효성 검사 (실시간)
 3. 아이디/닉네임 중복 확인 버튼 → Supabase profiles 테이블 조회
 4. [가입하기] 클릭
-5. Supabase Auth → auth.users 에 이메일(아이디@cbnu.match) + 비밀번호 등록
+5. Supabase Auth → auth.users에 이메일(아이디@cbnu.match) + 비밀번호 등록
 6. profiles 테이블에 부가 정보 INSERT (학과 포함)
 7. 가입 완료 → 로그인 페이지로 리다이렉트
 ```
 
 ---
 
-### 5.2 로그인
+### 5.2 로그인 (/login)
 
 #### 유저 스토리
 > "등록한 아이디와 비밀번호로 빠르게 로그인하고 싶다."
@@ -221,74 +220,99 @@
 #### 화면 구성
 
 ```
-┌─────────────────────────────────────┐
+┌───────────────────────────────────────────────────┐
+│  [매치글 작성] 버튼                                  │
+├───────────────────────────────────────────────────┤
 │  [전체] [⚽축구] [🥅풋살] [🏀농구] [🎮e스포츠]  ← 종목 필터
-│  [전체] [초급] [중급] [고수]                    ← 수준 필터
-├─────────────────────────────────────┤
-│  매치 카드 목록 (최신순)                         │
-│  ┌────────────────────────────────┐  │
-│  │ ⚽ 축구 | 5vs5 | 중급           │  │
-│  │ 팀명: FC충북 | 모집 중 🟢       │  │
-│  │ "같이 즐겁게 뛸 팀 구해요"      │  │
-│  │              [매치 신청] 버튼   │  │
-│  └────────────────────────────────┘  │
-└─────────────────────────────────────┘
+│  [전체] [초급] [중급] [고수]                      ← 수준 필터
+├───────────────────────────────────────────────────┤
+│  매치 카드 목록 (최신순, status='모집중'만 표시)     │
+│                                                   │
+│  ┌─ MatchCard ────────────────────────────────┐  │
+│  │ [⚽축구] [중급] [모집중]          2시간 전   │  │
+│  │ ⚽ FC충북  5vs5  by 김민준         │  │
+│  │ 📍 충북대 운동장                           │  │
+│  │ 📅 6월 1일 (일) 오후 03:00                │  │
+│  │ "같이 즐겁게 뛸 팀 구해요"                 │  │
+│  │ ─────────────────────────────────────── │  │
+│  │ [타인] [매치 신청] 버튼                    │  │
+│  │ [본인] ✏️수정버튼 + [신청 현황] 카드들     │  │
+│  └─────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────┘
 ```
 
-#### 매치 신청 상세 플로우
+#### 매치 목록 필터링 규칙
+
+```
+- status = '모집중' 인 매치만 표시 (매치확정 게시물은 목록 제외)
+- 종목 필터: 전체 / 축구 / 풋살 / 농구 / e스포츠
+- 수준 필터: 전체 / 초급 / 중급 / 고수
+- 정렬: created_at 내림차순 (최신순)
+```
+
+#### 매치 신청 플로우
 
 ```
 [매치 신청] 클릭
     │
-    ├─ 본인 게시글인가? → "본인 게시글에는 신청할 수 없습니다." 표시
-    │
-    ├─ 이미 신청했는가? → "이미 신청한 매치입니다." 표시
+    ├─ 비로그인? → "로그인이 필요합니다." toast
+    ├─ 본인 게시글? → 신청 불가 (버튼 미표시)
+    ├─ 이미 신청? → "신청 완료" 비활성 버튼 표시
     │
     └─ 정상 신청
         ↓
-        match_applications 테이블 INSERT (status: 'pending')
+        POST /api/matches/[id]/apply
+        → match_applications INSERT (status: 'pending')
+        → notifications INSERT (매치글 작성자 수신)
         ↓
-        notifications 테이블 INSERT (매치글 작성자 수신)
+        Supabase Realtime → 작성자 브라우저 알림 Push
+        알림: "[닉네임] 님이 매치를 신청했습니다. 실력: [수준]"
         ↓
-        Supabase Realtime → 작성자 브라우저에 알림 Push
-        ↓
-        알림 내용: "[닉네임] 님이 매치를 신청했습니다. 실력: [수준]"
-        ↓
-        작성자 알림 UI 또는 '내 정보 > 받은 신청' 탭에서 [신청 수락] / [신청 거절] 선택
-            ├─ 수락: status → 'accepted', 매치 상태 '매치 확정', 채팅방 생성
-            └─ 거절: status → 'rejected', 신청자에게 "거절되었습니다." 알림 발송
-                     매치글 상태는 '모집 중' 유지
+        작성자 알림 UI 또는 '내 정보 > 받은 신청' 탭에서 처리
+            ├─ 수락 → status='accepted', 매치 상태='매치확정', 채팅방 생성
+            └─ 거절 → status='rejected', 신청자에게 거절 알림
 ```
 
 #### 매치글 수정 (v2.1 신규)
 
 ```
-- 매치글 작성자만 수정 가능 (서버에서 author_id 검증)
-- 수정 경로: /match/[id]/edit (전용 페이지)
-- MatchCard '내 게시글' 영역에 수정 버튼(✏️) 표시 (모집중 상태에서만)
-  → 클릭 시 /match/[id]/edit 로 이동
-- 수정 페이지: 기존 데이터 자동 로드 → 폼 수정 → PUT /api/matches/[id]
-- 수정 완료 후 /match 리다이렉트
-- 실시간 반영: matches 테이블 Realtime 구독(event: '*')이 UPDATE 이벤트 감지
-  → 모든 사용자의 매치 목록 자동 갱신 (fetchData 호출)
-- 매치확정 상태에서는 수정 불가 (버튼 비표시)
-```
+접근 경로:
+  - /match 목록 페이지: MatchCard 내 '내 게시글' 영역 우상단 ✏️ 버튼
+  - /profile '내 매치글' 탭: Edit2 아이콘 버튼
+  → 두 경로 모두 /match/[id]/edit 페이지로 이동
 
-#### 매치 자동 만료
+수정 페이지 (/match/[id]/edit):
+  - 접근 시 기존 매치 데이터 자동 로드 (Supabase 조회)
+  - 서버에서 author_id = 현재 유저 ID 검증 (불일치 시 /match 리다이렉트)
+  - 수정 가능 필드: 팀명 / 종목 / 매치 인원 / 장소 / 경기 날짜·시간 / 소개글 / 원하는 수준
+  - 저장 → PUT /api/matches/[id] → 성공 시 /match 리다이렉트 + toast
+  - 수정 버튼 표시 조건: status='모집중' 인 경우에만 (매치확정 시 숨김)
 
-```
-- match_datetime(경기 날짜/시간)이 현재 시각보다 과거인 매치는 목록에서 즉시 제외
-- Vercel Cron Job (매일 00:00 KST): match_datetime < NOW() 인 레코드 DB에서 자동 삭제
-- 경로: /api/cron/cleanup-matches (schedule: "0 15 * * *")
+실시간 반영:
+  - /match 페이지는 matches 테이블 event:* Realtime 구독 중
+  - 수정 완료(UPDATE 이벤트) 감지 → fetchData() 자동 호출
+  - 접속 중인 모든 사용자 화면에 즉시 반영
 ```
 
 #### 신청 취소 후 재신청
 
 ```
 - 신청자가 '내 정보 > 지원한 신청' 탭에서 대기중 신청 취소
-- match_applications 레코드 DELETE
-- 매치 목록 실시간 구독이 DELETE 이벤트 감지 → appliedIds 즉시 갱신
-- 해당 매치 카드의 "신청 완료" → "매치 신청" 버튼으로 즉시 복원
+- DELETE /api/applications/[id]/withdraw → match_applications 레코드 삭제
+- 매치 목록 Realtime이 DELETE 이벤트 감지 → appliedIds 즉시 갱신
+- 해당 매치 카드: "신청 완료" 비활성 버튼 → "매치 신청" 활성 버튼으로 즉시 복원
+- MatchCard의 applied 상태가 alreadyApplied prop 변화를 useEffect로 동기화
+```
+
+#### 매치 자동 만료 (Cron)
+
+```
+- match_datetime(경기 날짜·시간)이 현재 시각보다 과거인 매치는 목록에서 즉시 제외
+  (쿼리 레벨에서 match_datetime > now() 또는 is null 필터 적용)
+- Vercel Cron Job (매일 00:00 KST):
+  DELETE FROM matches WHERE match_datetime < NOW()
+- 경로: GET /api/cron/cleanup-matches (schedule: "0 15 * * *")
+- CRON_SECRET 헤더로 무단 호출 방지
 ```
 
 ---
@@ -296,19 +320,28 @@
 ### 5.4 매치글 작성 (/match/write)
 
 #### 유저 스토리
-> "우리 팀 정보와 원하는 상대 조건을 작성하여 매치 상대를 모집하고 싶다."
+> "스포츠 매치 또는 공모전 팀원 모집 게시글을 한 곳에서 작성하고 싶다."
 
-#### 폼 필드 명세
+#### 모드 선택
+
+```
+/match/write 페이지 상단 탭으로 두 가지 모드 전환:
+  [스포츠 매치] 탭  ← 기본 선택
+  [공모전 팀원] 탭
+```
+
+#### 스포츠 매치 폼 필드
 
 | 필드 | UI 컴포넌트 | 필수 여부 | 제약 |
 |------|-------------|-----------|------|
 | 팀명 | text input | ✅ | 2~20자 |
-| 종목 | radio / card select | ✅ | 4가지 중 1개 선택 |
-| 매치 인원 | radio / button group | ✅ | 1vs1 / 3vs3 / 5vs5 / 11vs11 |
-| 장소 | text input | ✅ | 최대 50자 |
-| 경기 날짜·시간 | date + time input | ✅ | 현재 이후만 선택 가능 |
+| 종목 | card select (4개) | ✅ | 축구 / 풋살 / 농구 / e스포츠 |
+| 매치 인원 | button group | ✅ | 1vs1 / 3vs3 / 5vs5 / 11vs11 (종목별 연동) |
+| 경기 장소 | text input | ✅ | 최대 50자 |
+| 경기 날짜 | date picker | ✅ | 오늘 이후만 선택 가능 |
+| 경기 시간 | time picker | ✅ | HH:MM 형식 |
 | 소개글 | textarea | ✅ | 10~500자 |
-| 원하는 수준 | radio / button group | ✅ | 초급 / 중급 / 고수 |
+| 원하는 수준 | button group | ✅ | 초급 / 중급 / 고수 |
 
 #### 인원 ↔ 종목 연관 규칙
 
@@ -319,46 +352,145 @@
 | 🏀 농구 | 3vs3, 5vs5 |
 | 🎮 e스포츠 | 1vs1, 3vs3, 5vs5 |
 
-> 종목 선택 시 해당 종목에서 불가능한 인원 옵션은 비활성화(disabled) 처리
+> 종목 선택 시 해당 종목에서 불가능한 인원 옵션은 disabled 처리
+
+#### 공모전 팀원 폼 필드
+
+| 필드 | UI 컴포넌트 | 필수 여부 | 제약 |
+|------|-------------|-----------|------|
+| 공모전 이름 | text input | ✅ | 최대 100자 |
+| 공모전 분야 | grid button select | ✅ | 8개 카테고리 중 1개 |
+| 지역 | grid button select | ✅ | 충청북도 / 충청남도 / 세종특별자치시 / 대전광역시 |
+| 공모전 마감일 | date picker | ✅ | 오늘 이후 |
+| 모집 팀원 수 | button group (1~5) | ✅ | 본인 제외 인원 수 |
+| 소개글 | textarea | ✅ | 10~500자 |
+
+#### 게시 후 자동 처리 (공모전)
+
+```
+POST /api/contest-matches
+  → contest_matches INSERT (status: '모집중', current_count: 0)
+  → contest_chat_rooms INSERT (팀 그룹 채팅방 자동 생성)
+  → contest_chat_members INSERT (작성자 자동 멤버 등록)
+```
 
 ---
 
-### 5.5 팀 후기 (/review)
+### 5.5 공모전 목록 (/contest)
 
 #### 유저 스토리
-> "매치가 끝난 후 상대팀의 매너를 별점으로 평가하고, 내가 받은 평가를 확인하고 싶다."
+> "충청권 공모전 정보를 한눈에 보고 즐겨찾기에 저장하고 싶다."
 
-#### 평가 조건 체크
-
-```
-평가 버튼 활성화 조건:
-  1. match_applications.status = 'accepted' (매치 확정 상태)
-  2. 해당 매치의 참여자 (작성자 또는 신청자)
-  3. 해당 매치에 대해 아직 평가를 작성하지 않은 상태
-     (reviews 테이블에 reviewer_id + match_id 조합이 없음)
-```
-
-#### 평가 저장 로직
+#### 즐겨찾기 기능
 
 ```
-별점 선택 (1~5) + [평가 제출] 클릭
-    ↓
-reviews 테이블 INSERT
-    ├─ reviewer_id: 현재 로그인 유저
-    ├─ reviewee_id: 상대방
-    ├─ match_id: 해당 매치
-    └─ rating: 1~5
-    ↓
-이미 평가한 경우 → INSERT 차단 (UNIQUE 제약)
-    ↓
-상대방 프로필의 평균 점수 실시간 업데이트
+- 각 공모전 카드 우상단 ★ 버튼 클릭 → 즐겨찾기 토글
+- localStorage에 공모전 ID 배열 저장 (브라우저 재방문 시 유지)
+- 페이지 상단 "즐겨찾기" 섹션에 즐겨찾기한 카드 표시
+- 즐겨찾기 없을 시: "즐겨찾기한 공모전이 없습니다" 안내
+- DB 저장 없음 → 서버 부하 없이 개인화 기능 제공
+```
+
+#### 지역별 공모전 탭
+
+```
+지원 지역 (4개):
+  - 🏔️ 충청북도   (메인 색상: #1D4ED8 / 배경: #DBEAFE)
+  - 🌊 충청남도   (메인 색상: #0F766E / 배경: #CCFBF1)
+  - 🏛️ 세종특별자치시 (메인 색상: #7C3AED / 배경: #EDE9FE)
+  - ⚗️ 대전광역시  (메인 색상: #B45309 / 배경: #FEF3C7)
+
+카테고리 필터:
+  전체 / 글·문학 / 디자인·미술 / 사진·영상 / IT·과학
+  / 창업·마케팅 / 환경·사회 / 공학·기술 / 예술·공연
+
+정적 공모전 데이터: 4개 지역, 총 17개
+```
+
+#### 공모전 자동 만료
+
+```
+정적 데이터:
+  - isExpiredContest(deadline): deadline + 1일 < now() 이면 만료
+  - getContestsByRegion(): 만료 공모전 자동 필터링 후 반환
+
+외부 수집 데이터 (DB):
+  - GET /api/external-contests: deadline > yesterday 인 레코드만 반환
+  - Cron /api/cron/sync-contests: 매일 실행 → 만료 레코드 자동 DELETE
 ```
 
 ---
 
-### 5.6 메시지 시스템 (/messages) — v2.0 확장
+### 5.6 공모전 팀원 모집 (/contest/matches)
 
-#### 5.6.1 1:1 매치 채팅
+#### 유저 스토리
+> "공모전 팀원을 모집하거나 팀에 합류하고 싶다. 남은 자리가 실시간으로 보이면 좋겠다."
+
+#### 팀원 신청 플로우
+
+```
+[팀원 신청] 클릭 (status='모집중', remaining > 0, 본인 게시글 아닌 경우)
+    ↓
+POST /api/contest-matches/[id]/apply
+    → contest_applications INSERT (status: 'pending')
+    → notifications INSERT (게시글 작성자 수신)
+    ↓
+작성자 ContestMatchCard 내 신청 현황 또는 '내 정보 > 내 공모전'에서 처리
+```
+
+#### 실시간 남은 자리 표시
+
+```
+- ContestMatchCard: 남은 자리 배지 실시간 업데이트
+  - 초록 (remaining >= 3): 여유 있음
+  - 주황 (remaining <= 2): 마감 임박
+  - 빨강 (remaining <= 1): 마지막 자리
+
+- Supabase Realtime: 각 contest_matches 레코드 개별 구독
+  채널: contest-match-update:[matchId]
+  이벤트: UPDATE (filter: id=eq.[matchId])
+  → 수락 발생 즉시 current_count 업데이트 → 남은 자리 감소 표시
+
+- 폴링 폴백: 10초 간격 (Realtime 불안정 환경 대비)
+```
+
+#### 자동 마감 처리
+
+```
+팀 정원 충족 시 (current_count >= team_size):
+  1. contest_matches.status = '마감' 으로 업데이트
+  2. 목록 쿼리(status='모집중') 필터로 즉시 목록에서 제거
+  3. 나머지 pending 신청자 전원 자동 거절 + 알림 발송
+  4. 카드 즉시 숨김 처리 + "모집 완료" toast 표시
+  5. 신청 버튼: remaining <= 0 이면 자동 disabled
+  
+  주의: contest_matches DB 레코드는 삭제하지 않음
+  → contest_chat_rooms가 contest_match_id를 참조하므로
+    cascade 삭제 시 팀 채팅 이력 손실 위험
+  → status='마감' 상태로 목록 필터에서만 제외
+```
+
+#### 신청 수락 플로우 (작성자)
+
+```
+[수락] 클릭 (ContestMatchCard 또는 내 정보 > 내 공모전)
+    ↓
+PATCH /api/contest-applications/[id]/accept
+    ↓
+  1. contest_applications.status = 'accepted'
+  2. contest_matches.current_count += 1
+  3. current_count >= team_size → status = '마감'
+  4. contest_chat_rooms 조회 → 없으면 자동 생성
+  5. contest_chat_members에 신청자 추가 (그룹 채팅 자동 입장)
+  6. notifications INSERT → 신청자에게 수락 알림
+  7. 팀 가득 참 → 나머지 pending 신청자 자동 거절 + 알림 일괄 발송
+```
+
+---
+
+### 5.7 메시지 시스템 (/messages)
+
+#### 5.7.1 1:1 매치 채팅
 
 ##### 유저 스토리
 > "매치 수락 후 상대방과 경기 장소, 시간 등을 직접 채팅으로 조율하고 싶다."
@@ -374,284 +506,231 @@ match_applications.status = 'accepted' 로 업데이트되는 순간
 ##### 채팅방 나가기
 
 ```
-- 메시지 목록 또는 채팅방 내 [나가기] 버튼 클릭
-- 확인 다이얼로그 → 수락 시 message_rooms + messages CASCADE 삭제
-- 양쪽 모두 채팅 이력 삭제
+- 메시지 목록 또는 채팅방 내 헤더 [나가기] 버튼 클릭
+- 확인 다이얼로그 → 수락 시 DELETE /api/messages/[roomId]
+- message_rooms + messages CASCADE 삭제 (양쪽 채팅 이력 삭제)
 ```
 
-#### 5.6.2 공모전 그룹 채팅 (신규)
+#### 5.7.2 공모전 팀 그룹 채팅
 
 ##### 유저 스토리
 > "공모전 팀원이 모이면 그룹 채팅으로 협업하고 싶다."
-
-##### 그룹 채팅방 생성 조건
-
-```
-contest_applications.status = 'accepted' 로 업데이트되는 순간
-→ contest_chat_rooms 테이블에 자동 room INSERT (없는 경우)
-→ contest_chat_members에 수락된 신청자 자동 추가
-→ 팀장(게시글 작성자)도 최초 작성 시 멤버에 자동 포함
-```
 
 ##### 탭 구성
 
 ```
 /messages
-├── [매치 채팅] 탭  ← 1:1 채팅방 목록
-└── [공모전 팀 채팅] 탭  ← 그룹 채팅방 목록 (신규)
+├── [매치 채팅] 탭      ← 1:1 매치 채팅방 목록
+└── [공모전 팀 채팅] 탭  ← 공모전 그룹 채팅방 목록
 ```
 
-##### 팀원 초대하기 (신규)
+##### 그룹 채팅방 생성 조건
 
 ```
-그룹 채팅방 헤더의 [팀원 초대] 버튼 (팀장만 표시)
+contest_matches 게시글 작성 완료 시
+→ contest_chat_rooms 자동 생성 (POST /api/contest-matches)
+→ 작성자가 contest_chat_members에 자동 등록
+
+신청자 수락 시 (accept API)
+→ 수락된 신청자 contest_chat_members에 자동 추가
+→ 신청자에게 "팀 채팅방에서 대화하세요" 알림 발송
+```
+
+##### 팀원 초대 기능 (팀장 전용)
+
+```
+그룹 채팅방 헤더 [팀원 초대] 버튼 (팀장만 표시)
     ↓
 GET /api/contest-rooms/[id]/invite
-    → 해당 공모전에 신청하고 수락(status='accepted')된 사람 중
-    → 아직 채팅방에 없는 멤버 목록 반환
+    → 해당 공모전에 status='accepted'인 신청자 중 아직 채팅방 미참여자 반환
     ↓
-초대 모달에서 팀원 선택 → [초대] 클릭
+초대 모달에서 팀원 선택 → [초대] 버튼 클릭
     ↓
 POST /api/contest-rooms/[id]/invite
-    → 보안 검증:
-        1. 요청자 = 팀장(contest_match.author_id) 여부 확인
-        2. 초대 대상 = contest_applications.status='accepted' 여부 확인
-        3. 이미 멤버인 경우 409 Conflict 반환
-    → contest_chat_members INSERT
+    → 보안 3중 검증:
+        1. 요청자 = contest_match.author_id (팀장 여부)
+        2. 초대 대상 = contest_applications.status='accepted' (수락된 신청자)
+        3. 초대 대상이 이미 채팅방 멤버인 경우 → 409 Conflict 반환
+    → 검증 통과 시 contest_chat_members INSERT
 ```
 
 ##### 채팅방 나가기 (그룹)
 
 ```
-- 메시지 목록 [나가기] 버튼 또는 채팅방 내 헤더 [나가기] 버튼
-- 확인 다이얼로그 → 수락 시 contest_chat_members에서 해당 유저만 제거
-- 채팅방·메시지는 다른 팀원에게 유지됨
+- 채팅방 내 헤더 [나가기] 버튼 또는 메시지 목록 [나가기] 버튼
+- 확인 다이얼로그 → DELETE /api/contest-rooms/[id]/leave
+- contest_chat_members에서 해당 유저만 제거 (멤버십만 삭제)
+- 채팅방·메시지는 다른 팀원에게 그대로 유지
 ```
 
 ##### 실시간 채팅 구현
 
 ```
 Supabase Realtime SUBSCRIBE
-    채널: contest-chat:[roomId]
-    이벤트: INSERT (contest_chat_messages)
+  채널: contest-chat:[roomId]
+  이벤트: INSERT (contest_chat_messages)
 
 신규 메시지 수신 시:
-    → 채팅창 자동 스크롤 다운
-    → 발신자 닉네임 + 아바타 표시
-    → 폴링 폴백 3초 (Realtime 불안정 환경 대비)
+  → 메시지 목록 즉시 추가 + 자동 스크롤 다운
+  → 발신자 닉네임 + 아바타 표시
+  → 폴링 폴백: 3초 간격 (Realtime 불안정 환경 대비)
 ```
 
 ---
 
-### 5.7 내 정보 (/profile) — v2.0 확장
+### 5.8 팀 후기 (/review)
 
 #### 유저 스토리
-> "내 프로필을 확인하고 닉네임·실력 수준을 수정하고 싶다. 받은 신청과 지원한 신청을 한눈에 관리하고 싶다."
+> "매치가 끝난 후 상대팀의 매너를 별점으로 평가하고, 내가 받은 평가를 확인하고 싶다."
 
-#### 탭 구성 (v2.0)
-
-| 탭 | 내용 |
-|----|------|
-| 내 매치글 | 작성한 매치글 목록, 수정(/match/[id]/edit 이동)/삭제 |
-| 받은 신청 *(신규)* | 내 매치에 들어온 신청 목록, 수락/거절, 실시간 갱신 |
-| 지원한 신청 *(신규)* | 내가 신청한 매치 목록, 대기중 신청 취소 가능 |
-| 내 경기 | 확정된 매치 목록, 매치 취소 가능 |
-| 내 공모전 | 참여 중인 공모전 목록 |
-| 캘린더 | 경기 일정 달력 |
-| 매너 평가 | 받은 별점 이력 |
-
-#### 받은 신청 탭 상세 (신규)
+#### 평가 조건
 
 ```
-- 내 모집 중인 매치글에 들어온 pending 신청 목록 표시
-- 각 신청 카드: 신청자 닉네임 + 실력 + 신청 매치명
-- [신청 수락] 버튼: PATCH /api/applications/[id]/accept → 매치 확정 + 채팅방 생성
-- [신청 거절] 버튼: PATCH /api/applications/[id]/reject
-- 10초 폴링으로 신규 신청 자동 반영
-- 수락 즉시 매치 목록에 반영 (매치확정 상태로 변경)
+평가 버튼 활성화 조건:
+  1. match_applications.status = 'accepted' (매치 확정 상태)
+  2. 해당 매치의 참여자 (작성자 또는 신청자)
+  3. 해당 매치에 대해 아직 평가를 작성하지 않은 상태
+     (reviews 테이블에 reviewer_id + match_id 조합 없음)
 ```
 
-#### 지원한 신청 탭 상세 (신규)
+#### 평가 저장 로직
 
 ```
-- 내가 신청한 매치 목록 표시 (rejected 제외)
-- 상태 표시: 검토 중(pending) / 수락됨(accepted)
-- 대기중(pending) 신청에만 [신청 취소] 버튼 표시
-- 취소 클릭 → DELETE /api/applications/[id]/withdraw
-    → match_applications 레코드 삭제
-    → 매치는 '모집중' 상태 유지 (자동 복원)
-    → 매치 목록에서 해당 매치 "신청 완료" → "매치 신청" 버튼으로 즉시 복원
-- 수락됨 신청: 채팅방 안내 메시지 표시
-```
-
-#### 프로필 카드
-
-```
-┌─────────────────────────────┐
-│  👤 프로필                    │
-│  닉네임: [수정 가능]           │
-│  아이디: cbnu_user            │
-│  학번:   202*****             │ ← 마스킹
-│  소속학과: 컴퓨터공학과         │
-│  실력:   [중급] 즉시 저장       │
-│  공모전 출전 횟수: [3회]        │
-├─────────────────────────────┤
-│  [내 매치글] [받은 신청] [지원한 신청] [내 경기] [내 공모전] [캘린더] [매너 평가]
-└─────────────────────────────┘
+별점 선택 (1~5) + [평가 제출] 클릭
+    ↓
+POST /api/reviews
+  reviews 테이블 INSERT
+    ├─ reviewer_id: 현재 로그인 유저
+    ├─ reviewee_id: 상대방
+    ├─ match_id: 해당 매치
+    └─ rating: 1~5
+    ↓
+이미 평가한 경우 → UNIQUE 제약으로 INSERT 차단
+    ↓
+상대방 프로필의 평균 별점 실시간 반영
 ```
 
 ---
 
-### 5.8 알림 시스템
+### 5.9 알림 시스템 (/notifications)
 
 #### 알림 유형 명세
 
-| ID | 이벤트 | 수신자 | 메시지 | 액션 버튼 |
-|----|--------|--------|--------|-----------|
-| N1 | 매치 신청 수신 | 매치글 작성자 | "[닉네임] 님이 매치를 신청했습니다. 실력: [수준]" | [수락] [거절] |
-| N2 | 매치 수락 | 신청자 | "매치가 수락되었습니다! [팀명]과의 매치가 확정됐어요." | [채팅 시작] |
-| N3 | 매치 거절 | 신청자 | "거절되었습니다." | - |
-| N4 | 새 메시지 | 채팅 상대방 | "[닉네임]: [메시지 미리보기]" | [채팅 열기] |
-| N5 | 공모전 팀원 신청 수신 | 모집 게시글 작성자 | "[닉네임] 님이 공모전 팀원 신청했습니다." | - |
-| N6 | 공모전 팀원 수락 | 신청자 | "[공모전명] 팀원 신청이 수락되었습니다!" | [채팅 시작] |
-| N7 | 공모전 팀원 거절 | 신청자 | "[공모전명] 팀원 신청이 거절되었습니다." | - |
-| N8 | 매치 취소 | 상대방 | "[닉네임] 님이 매치를 취소했습니다." | - |
+| ID | 이벤트 | 수신자 | 메시지 |
+|----|--------|--------|--------|
+| N1 | 매치 신청 수신 | 매치글 작성자 | "[닉네임] 님이 매치를 신청했습니다. 실력: [수준]" |
+| N2 | 매치 수락 | 신청자 | "매치가 수락되었습니다! [팀명]과의 매치가 확정됐어요." |
+| N3 | 매치 거절 | 신청자 | "거절되었습니다." |
+| N4 | 새 메시지 | 채팅 상대방 | "[닉네임]: [메시지 미리보기]" |
+| N5 | 공모전 팀원 신청 수신 | 모집 게시글 작성자 | "[닉네임] 님이 공모전 팀원 신청했습니다." |
+| N6 | 공모전 팀원 수락 | 신청자 | "[공모전명] 팀원 신청이 수락되었습니다! 팀 채팅방에서 대화하세요." |
+| N7 | 공모전 팀원 거절 | 신청자 | "[공모전명] 팀원 신청이 거절되었습니다. (팀 정원 마감)" |
+| N8 | 매치 취소 | 상대방 | "[닉네임] 님이 매치를 취소했습니다." |
 
 #### 알림 처리 방식
 
 ```
 Supabase Realtime 구독
-  채널: notifications:user_id=eq.[현재 유저 ID]
+  채널: notifications (filter: user_id=eq.[현재 유저 ID])
   이벤트: INSERT
 
 수신 시:
   1. 헤더 알림 벨 아이콘에 배지 숫자 +1
-  2. 토스트(Toast) 메시지 우측 하단 팝업 (3초 자동 소멸)
+  2. toast 메시지 우측 하단 팝업 (3초 자동 소멸)
   3. /notifications 페이지에 내역 누적
   4. 읽음 처리 시 배지 감소
 ```
 
 ---
 
-### 5.9 공모전 (/contest) — v2.0 신규
+### 5.10 내 정보 (/profile)
 
 #### 유저 스토리
-> "충청권 공모전 정보를 한눈에 보고 즐겨찾기에 저장하고 싶다. 관심 공모전의 팀원을 모집하거나 팀에 합류하고 싶다."
+> "내 프로필을 확인하고 닉네임·실력 수준을 수정하고 싶다. 받은 신청과 지원한 신청을 한눈에 관리하고 싶다."
 
-#### 5.9.1 공모전 목록
+#### 탭 구성 (7개)
 
-##### 즐겨찾기 (신규)
+| 탭 | 내용 | 특이사항 |
+|----|------|----------|
+| 내 매치글 | 작성한 매치글 목록 | 수정(/match/[id]/edit) / 삭제 버튼 |
+| 받은 신청 | 내 매치에 들어온 pending 신청 | 수락/거절 버튼, 10초 폴링 |
+| 지원한 신청 | 내가 신청한 매치 목록 | pending 상태만 취소 버튼 표시 |
+| 내 경기 | 확정된 매치 목록 | 매치 취소 버튼, 상대방 알림 |
+| 내 공모전 | 참여 중인 공모전 목록 | D-Day 배지, 작성자/참여자 구분 |
+| 캘린더 | 경기·공모전 일정 달력 | MatchCalendar 컴포넌트 |
+| 매너 평가 | 받은 별점 이력 | 평균 별점, 매치별 평가 목록 |
 
-```
-- 화면 상단: 즐겨찾기 섹션 (기존 자동수집 섹션 대체)
-- 지역별 공모전 카드 우상단 ★ 버튼 클릭 → 즐겨찾기 추가/해제 (토글)
-- 즐겨찾기 데이터: localStorage에 공모전 ID 배열 저장 (브라우저 재방문 유지)
-- 즐겨찾기 섹션: 즐겨찾기한 공모전 카드 표시, ★ 버튼으로 즉시 삭제
-- 즐겨찾기 없을 시: 안내 메시지 표시
-```
-
-##### 지역별 공모전 (정적 데이터)
-
-```
-지원 지역 (v2.0 확장):
-  - 충청북도 (🏔️)
-  - 충청남도 (🌊)
-  - 세종특별자치시 (🏛️) ← v2.0 신규
-  - 대전광역시 (⚗️)     ← v2.0 신규
-
-카테고리 필터:
-  전체 / 글·문학 / 디자인·미술 / 사진·영상 / IT·과학 / 창업·마케팅 / 환경·사회 / 공학·기술 / 예술·공연
-```
-
-##### 공모전 자동 만료 (신규)
+#### 받은 신청 탭 상세
 
 ```
-정적 데이터:
-  - isExpiredContest(deadline): deadline + 1일 < now() 이면 만료 처리
-  - getContestsByRegion(): 만료된 공모전 자동 필터링하여 반환
-
-외부 수집 데이터 (DB):
-  - GET /api/external-contests: deadline > yesterday 인 레코드만 반환
-  - Cron /api/cron/sync-contests: 매일 실행 시 만료 레코드 자동 DELETE
+- 내 '모집중' 매치글에 들어온 pending 신청 목록 표시
+- 신청 카드: 신청 매치명 + 신청자 닉네임 + 실력 수준
+- [신청 수락] 버튼: PATCH /api/applications/[id]/accept
+    → 매치 상태 '매치확정' + 채팅방 생성 + 알림 발송
+- [신청 거절] 버튼: PATCH /api/applications/[id]/reject
+    → 신청자에게 거절 알림
+- 10초 폴링으로 신규 신청 자동 반영
+- 탭 배지: 신청 건수 실시간 표시
 ```
 
-#### 5.9.2 공모전 팀원 모집 (/contest/matches)
-
-##### 유저 스토리
-> "공모전 팀원을 모집하거나 팀에 합류하고 싶다."
-
-##### 팀원 모집 게시글 작성
+#### 지원한 신청 탭 상세
 
 ```
-필드:
-  - 공모전 이름 (텍스트, 최대 100자)
-  - 공모전 분야 (카테고리 선택)
-  - 지역 (충청북도 / 충청남도 / 세종특별자치시 / 대전광역시)
-  - 공모전 마감일 (date picker, 오늘 이후)
-  - 모집 팀원 수 (1~5명, 본인 제외)
-  - 소개글 (최소 10자)
-
-게시 후 자동 처리:
-  → contest_matches INSERT (status: '모집중', current_count: 0)
-  → contest_chat_rooms INSERT (팀 그룹 채팅방 자동 생성)
-  → contest_chat_members INSERT (작성자 자동 추가)
+- 내가 신청한 매치 목록 표시 (rejected 제외)
+- 상태 배지: 검토 중(pending, 노랑) / 수락됨(accepted, 초록)
+- pending 상태에만 [신청 취소] 버튼 표시
+    → DELETE /api/applications/[id]/withdraw
+    → match_applications 레코드 삭제
+    → 매치 '모집중' 상태 유지 (자동 복원)
+    → 매치 목록에서 "신청 완료" → "매치 신청" 즉시 복원
+- accepted 상태: "🎉 수락되었습니다! 메시지에서 채팅방을 확인하세요" 표시
 ```
 
-##### 실시간 남은 자리 표시 (신규)
+#### 프로필 카드 구성
 
 ```
-- 각 카드: 남은 자리 배지 실시간 업데이트
-  - 초록: 여유 있음 / 주황: 2명 이하 / 빨강: 1명 이하
-- Supabase Realtime: 각 contest_matches 레코드 UPDATE 개별 구독
-- 수락 발생 즉시 모든 사용자 화면에서 남은 자리 감소 (예: 4명 → 3명 → 2명)
-```
-
-##### 자동 마감 처리 (신규)
-
-```
-팀 정원 충족 시 (current_count >= team_size):
-  1. contest_matches.status = '마감' 으로 업데이트
-  2. 목록 쿼리(status='모집중') 필터로 즉시 목록에서 제거
-  3. 나머지 pending 신청자 전원 자동 거절 + 알림 발송
-  4. 카드 자체에서 즉시 숨김 처리 + "모집 완료" 토스트 표시
-  5. 신청 버튼: remaining <= 0 이면 자동 비활성화
-```
-
-##### 신청 수락 플로우
-
-```
-[신청 수락] 클릭 (작성자만)
-    ↓
-PATCH /api/contest-applications/[id]/accept
-    ↓
-  1. contest_applications.status = 'accepted'
-  2. contest_matches.current_count += 1
-  3. current_count >= team_size → status = '마감'
-  4. contest_chat_members에 신청자 추가 (채팅방 자동 입장)
-  5. 신청자에게 수락 알림 발송
-  6. 팀 가득 참 → 나머지 신청자 자동 거절 + 알림
+┌──────────────────────────────────────┐
+│  👤  [닉네임] ✏️편집                   │
+│      [아이디]                          │
+│                                      │
+│  이름: [실명]      학번: 202*****       │
+│  소속학과: 컴퓨터공학과                  │
+│                                      │
+│  실력 수준: [초급] [중급] [고수] 즉시저장 │
+│  공모전 출전 횟수: [0~10+회] 즉시저장    │
+└──────────────────────────────────────┘
 ```
 
 ---
 
-### 5.10 자동화 시스템 (Cron Jobs) — v2.0 신규
+### 5.11 자동화 시스템 (Cron Jobs)
 
 #### 운영 자동화 명세
 
-| Cron 경로 | 스케줄 | 동작 |
-|-----------|--------|------|
-| `/api/cron/sync-contests` | 매일 00:00 KST | 올콘·링커리어에서 공모전 자동 수집 + 만료 레코드 삭제 |
-| `/api/cron/cleanup-matches` | 매일 00:00 KST | match_datetime 지난 매치 게시물 자동 삭제 |
+| Cron 경로 | 스케줄 (KST) | 동작 |
+|-----------|-------------|------|
+| `/api/cron/sync-contests` | 매일 00:00 | 외부 공모전 자동 수집(올콘·링커리어) + 만료 레코드 DELETE |
+| `/api/cron/cleanup-matches` | 매일 00:00 | match_datetime 지난 매치 게시물 자동 DELETE |
 
 #### vercel.json 설정
 
 ```json
 {
   "crons": [
-    { "path": "/api/cron/sync-contests", "schedule": "0 15 * * *" },
+    { "path": "/api/cron/sync-contests",   "schedule": "0 15 * * *" },
     { "path": "/api/cron/cleanup-matches", "schedule": "0 15 * * *" }
   ]
 }
+```
+
+> `"0 15 * * *"` = UTC 15:00 = KST 00:00
+
+#### Cron 보안
+
+```
+- CRON_SECRET 환경변수를 헤더로 검증
+- Authorization: Bearer ${CRON_SECRET} 불일치 시 401 반환
+- 무단 외부 호출 차단
 ```
 
 ---
@@ -663,157 +742,161 @@ PATCH /api/contest-applications/[id]/accept
 ```
 auth.users (Supabase 내장)
     │ 1
-    │
     ▼ N
 profiles
-    ├─ id (UUID, FK → auth.users.id)
-    ├─ username (TEXT, UNIQUE)
-    ├─ nickname (TEXT, UNIQUE)
-    ├─ full_name (TEXT)
-    ├─ student_id (CHAR(8))
-    ├─ skill_level (ENUM: 초급/중급/고수)
-    ├─ department (TEXT)              ← v2.0 추가
-    ├─ contest_count (INTEGER)        ← v2.0 추가
-    ├─ created_at (TIMESTAMPTZ)
-    └─ updated_at (TIMESTAMPTZ)
+    ├─ id            UUID  PK (FK → auth.users.id)
+    ├─ username      TEXT  UNIQUE
+    ├─ nickname      TEXT  UNIQUE
+    ├─ full_name     TEXT
+    ├─ student_id    CHAR(8)
+    ├─ skill_level   ENUM  초급/중급/고수
+    ├─ department    TEXT
+    ├─ contest_count INTEGER  DEFAULT 0
+    ├─ created_at    TIMESTAMPTZ
+    └─ updated_at    TIMESTAMPTZ
 
 profiles ──1──< matches
-    ├─ id (UUID, PK)
-    ├─ author_id (UUID, FK → profiles.id)
-    ├─ team_name (TEXT)
-    ├─ sport (ENUM: 축구/풋살/농구/e스포츠)
-    ├─ match_size (ENUM: 1vs1/3vs3/5vs5/11vs11)
-    ├─ location (TEXT)
-    ├─ description (TEXT)
-    ├─ required_level (ENUM: 초급/중급/고수)
-    ├─ status (ENUM: 모집중/매치확정/취소됨)
-    ├─ match_datetime (TIMESTAMPTZ)   ← v2.0 추가 (경기 일정)
-    ├─ created_at (TIMESTAMPTZ)
-    └─ updated_at (TIMESTAMPTZ)
+    ├─ id             UUID  PK
+    ├─ author_id      UUID  FK → profiles.id
+    ├─ team_name      TEXT
+    ├─ sport          ENUM  축구/풋살/농구/e스포츠
+    ├─ match_size     ENUM  1vs1/3vs3/5vs5/11vs11
+    ├─ location       TEXT
+    ├─ description    TEXT
+    ├─ required_level ENUM  초급/중급/고수
+    ├─ status         ENUM  모집중/매치확정/취소됨
+    ├─ match_datetime TIMESTAMPTZ  (경기 일정, nullable)
+    ├─ created_at     TIMESTAMPTZ
+    └─ updated_at     TIMESTAMPTZ
 
 matches ──1──< match_applications
-    ├─ id (UUID, PK)
-    ├─ match_id (UUID, FK → matches.id)
-    ├─ applicant_id (UUID, FK → profiles.id)
-    ├─ status (ENUM: pending/accepted/rejected)
-    ├─ created_at (TIMESTAMPTZ)
-    └─ updated_at (TIMESTAMPTZ)
+    ├─ id           UUID  PK
+    ├─ match_id     UUID  FK → matches.id
+    ├─ applicant_id UUID  FK → profiles.id
+    ├─ status       ENUM  pending/accepted/rejected
+    ├─ created_at   TIMESTAMPTZ
+    └─ updated_at   TIMESTAMPTZ
     UNIQUE(match_id, applicant_id)
 
-match_applications ──1──< message_rooms
-    ├─ id (UUID, PK)
-    ├─ application_id (UUID, FK → match_applications.id)
-    ├─ participant_1 (UUID, FK → profiles.id)
-    ├─ participant_2 (UUID, FK → profiles.id)
-    └─ created_at (TIMESTAMPTZ)
+match_applications ──1──1 message_rooms
+    ├─ id              UUID  PK
+    ├─ application_id  UUID  FK → match_applications.id
+    ├─ participant_1   UUID  FK → profiles.id
+    ├─ participant_2   UUID  FK → profiles.id
+    └─ created_at      TIMESTAMPTZ
 
 message_rooms ──1──< messages
-    ├─ id (UUID, PK)
-    ├─ room_id (UUID, FK → message_rooms.id)
-    ├─ sender_id (UUID, FK → profiles.id)
-    ├─ content (TEXT)
-    ├─ is_read (BOOLEAN, DEFAULT false)
-    └─ created_at (TIMESTAMPTZ)
+    ├─ id         UUID  PK
+    ├─ room_id    UUID  FK → message_rooms.id
+    ├─ sender_id  UUID  FK → profiles.id
+    ├─ content    TEXT
+    ├─ is_read    BOOLEAN  DEFAULT false
+    └─ created_at TIMESTAMPTZ
 
-match_applications ──1──< reviews
-    ├─ id (UUID, PK)
-    ├─ match_id (UUID, FK → matches.id)
-    ├─ reviewer_id (UUID, FK → profiles.id)
-    ├─ reviewee_id (UUID, FK → profiles.id)
-    ├─ rating (SMALLINT, CHECK 1~5)
-    └─ created_at (TIMESTAMPTZ)
+matches ──1──< reviews
+    ├─ id          UUID  PK
+    ├─ match_id    UUID  FK → matches.id
+    ├─ reviewer_id UUID  FK → profiles.id
+    ├─ reviewee_id UUID  FK → profiles.id
+    ├─ rating      SMALLINT  CHECK(1~5)
+    └─ created_at  TIMESTAMPTZ
     UNIQUE(match_id, reviewer_id)
 
 profiles ──1──< notifications
-    ├─ id (UUID, PK)
-    ├─ user_id (UUID, FK → profiles.id)
-    ├─ type (ENUM: match_apply/match_accept/match_reject/match_cancel/
-    │              new_message/contest_apply/contest_accept/contest_reject)
-    ├─ message (TEXT)
-    ├─ related_id (UUID)
-    ├─ is_read (BOOLEAN, DEFAULT false)
-    └─ created_at (TIMESTAMPTZ)
+    ├─ id         UUID  PK
+    ├─ user_id    UUID  FK → profiles.id
+    ├─ type       ENUM  match_apply/match_accept/match_reject/match_cancel/
+    │                   new_message/contest_apply/contest_accept/contest_reject
+    ├─ message    TEXT
+    ├─ related_id UUID
+    ├─ is_read    BOOLEAN  DEFAULT false
+    └─ created_at TIMESTAMPTZ
 
-── 공모전 관련 테이블 (v2.0 신규) ──────────────────────────
+── 공모전 관련 테이블 ─────────────────────────────────────
 
 profiles ──1──< contest_matches
-    ├─ id (UUID, PK)
-    ├─ author_id (UUID, FK → profiles.id)
-    ├─ contest_name (TEXT)
-    ├─ contest_category (TEXT)
-    ├─ region (TEXT)
-    ├─ deadline (DATE)
-    ├─ team_size (INTEGER, CHECK 1~5)
-    ├─ current_count (INTEGER, DEFAULT 0)
-    ├─ description (TEXT)
-    ├─ status (ENUM: 모집중/마감)
-    ├─ created_at (TIMESTAMPTZ)
-    └─ updated_at (TIMESTAMPTZ)
+    ├─ id               UUID  PK
+    ├─ author_id        UUID  FK → profiles.id
+    ├─ contest_name     TEXT
+    ├─ contest_category TEXT
+    ├─ region           TEXT
+    ├─ deadline         DATE
+    ├─ team_size        INTEGER  CHECK(1~5)
+    ├─ current_count    INTEGER  DEFAULT 0
+    ├─ description      TEXT
+    ├─ status           ENUM  모집중/마감
+    ├─ created_at       TIMESTAMPTZ
+    └─ updated_at       TIMESTAMPTZ
 
 contest_matches ──1──< contest_applications
-    ├─ id (UUID, PK)
-    ├─ contest_match_id (UUID, FK → contest_matches.id)
-    ├─ applicant_id (UUID, FK → profiles.id)
-    ├─ status (ENUM: pending/accepted/rejected)
-    ├─ created_at (TIMESTAMPTZ)
-    └─ updated_at (TIMESTAMPTZ)
+    ├─ id                UUID  PK
+    ├─ contest_match_id  UUID  FK → contest_matches.id
+    ├─ applicant_id      UUID  FK → profiles.id
+    ├─ status            ENUM  pending/accepted/rejected
+    ├─ created_at        TIMESTAMPTZ
+    └─ updated_at        TIMESTAMPTZ
     UNIQUE(contest_match_id, applicant_id)
 
-contest_matches ──1──< contest_chat_rooms
-    ├─ id (UUID, PK)
-    ├─ contest_match_id (UUID, FK → contest_matches.id)
-    ├─ name (TEXT)
-    └─ created_at (TIMESTAMPTZ)
+contest_matches ──1──1 contest_chat_rooms
+    ├─ id                UUID  PK
+    ├─ contest_match_id  UUID  FK → contest_matches.id  UNIQUE
+    ├─ name              TEXT
+    └─ created_at        TIMESTAMPTZ
 
 contest_chat_rooms ──1──< contest_chat_members
-    ├─ id (UUID, PK)
-    ├─ room_id (UUID, FK → contest_chat_rooms.id)
-    ├─ user_id (UUID, FK → profiles.id)
-    └─ joined_at (TIMESTAMPTZ)
+    ├─ id        UUID  PK
+    ├─ room_id   UUID  FK → contest_chat_rooms.id
+    ├─ user_id   UUID  FK → profiles.id
+    └─ joined_at TIMESTAMPTZ
     UNIQUE(room_id, user_id)
 
 contest_chat_rooms ──1──< contest_chat_messages
-    ├─ id (UUID, PK)
-    ├─ room_id (UUID, FK → contest_chat_rooms.id)
-    ├─ sender_id (UUID, FK → profiles.id)
-    ├─ content (TEXT)
-    └─ created_at (TIMESTAMPTZ)
+    ├─ id         UUID  PK
+    ├─ room_id    UUID  FK → contest_chat_rooms.id
+    ├─ sender_id  UUID  FK → profiles.id
+    ├─ content    TEXT
+    └─ created_at TIMESTAMPTZ
 
 ── 외부 공모전 (자동 수집) ──────────────────────────────────
 
 external_contests
-    ├─ id (UUID, PK)
-    ├─ title (TEXT)
-    ├─ url (TEXT, UNIQUE)
-    ├─ category (TEXT)
-    ├─ organizer (TEXT)
-    ├─ deadline (DATE)
-    ├─ source (TEXT)              ← 'all-con' | 'linkareer'
-    ├─ description (TEXT)
-    └─ created_at (TIMESTAMPTZ)
+    ├─ id          UUID  PK
+    ├─ title       TEXT
+    ├─ url         TEXT  UNIQUE
+    ├─ category    TEXT
+    ├─ organizer   TEXT
+    ├─ deadline    DATE
+    ├─ source      TEXT  ('all-con' | 'linkareer')
+    ├─ description TEXT
+    └─ created_at  TIMESTAMPTZ
 ```
 
 ### 6.2 Row Level Security (RLS) 정책
 
-| 테이블 | 정책 |
-|--------|------|
-| `profiles` | 본인만 UPDATE 가능, 전체 SELECT 허용 |
-| `matches` | 로그인 유저만 INSERT, 본인만 UPDATE/DELETE |
-| `match_applications` | 로그인 유저만 INSERT, 관련 당사자만 UPDATE |
-| `reviews` | 매치 참여자만 INSERT, 수정/삭제 불가 |
-| `messages` | 해당 채팅방 참여자만 SELECT/INSERT |
-| `notifications` | 본인 알림만 SELECT/UPDATE |
-| `contest_matches` | 로그인 유저만 INSERT, 본인만 UPDATE/DELETE |
-| `contest_applications` | 로그인 유저만 INSERT, 관련 당사자만 UPDATE |
-| `contest_chat_members` | 해당 채팅방 멤버만 SELECT, 팀장만 INSERT |
-| `contest_chat_messages` | 해당 채팅방 멤버만 SELECT/INSERT |
-| `external_contests` | 전체 SELECT (인증 불필요), admin만 INSERT/UPDATE/DELETE |
+| 테이블 | SELECT | INSERT | UPDATE | DELETE |
+|--------|--------|--------|--------|--------|
+| `profiles` | 전체 허용 | 본인만 | 본인만 | 불가 |
+| `matches` | 전체 허용 | 로그인 유저 | 본인(author_id) | 본인(author_id) |
+| `match_applications` | 관련 당사자 | 로그인 유저 | 관련 당사자 | 신청자(본인) |
+| `message_rooms` | 참여자만 | 시스템(accept API) | 불가 | 참여자 |
+| `messages` | 참여자만 | 참여자 | 불가 | 불가 |
+| `reviews` | 전체 허용 | 매치 참여자 | 불가 | 불가 |
+| `notifications` | 본인만 | 시스템 | 본인만 | 불가 |
+| `contest_matches` | 전체 허용 | 로그인 유저 | 본인(author_id) | 본인(author_id) |
+| `contest_applications` | 관련 당사자 | 로그인 유저 | 관련 당사자 | 신청자(본인) |
+| `contest_chat_rooms` | 멤버만 | 시스템 | 불가 | 불가 |
+| `contest_chat_members` | 멤버만 | 시스템(3중 검증) | 불가 | 본인 |
+| `contest_chat_messages` | 멤버만 | 멤버 | 불가 | 불가 |
+| `external_contests` | 전체 허용 | admin만 | admin만 | admin만 |
+
+> RLS를 우회해야 하는 서버 작업(수락 처리, 알림 삽입 등)은 supabaseAdmin (SERVICE_ROLE_KEY) 클라이언트 사용
 
 ---
 
 ## 7. API 설계
 
-> Next.js API Routes (`/app/api/`) 기반 서버리스 함수
+> Next.js API Routes (`/app/api/`) 기반 서버리스 함수  
+> 모든 인증 필요 API는 Supabase Auth 세션 검증 수행
 
 ### 7.1 인증 API
 
@@ -829,37 +912,36 @@ external_contests
 
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
-| GET | `/api/matches` | 매치 목록 조회 (만료 필터 포함) |
+| GET | `/api/matches` | 매치 목록 조회 (status='모집중', 만료 필터) |
 | POST | `/api/matches` | 매치글 작성 |
-| GET | `/api/matches/[id]` | 매치 상세 조회 |
-| PUT | `/api/matches/[id]` | 매치글 수정 (본인만, 서버 검증) |
-| DELETE | `/api/matches/[id]` | 매치글 삭제 |
-| PATCH | `/api/matches/[id]/cancel` | 확정 매치 취소 |
+| PUT | `/api/matches/[id]` | 매치글 수정 (author_id 서버 검증) |
+| DELETE | `/api/matches/[id]` | 매치글 삭제 (author_id 서버 검증) |
+| PATCH | `/api/matches/[id]/cancel` | 확정 매치 취소 + 상대방 알림 |
 
 ### 7.3 매치 신청 API
 
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
-| POST | `/api/matches/[id]/apply` | 매치 신청 |
-| PATCH | `/api/applications/[id]/accept` | 매치 수락 |
-| PATCH | `/api/applications/[id]/reject` | 매치 거절 |
-| DELETE | `/api/applications/[id]/withdraw` | 대기중 신청 취소 (신청자) |
+| POST | `/api/matches/[id]/apply` | 매치 신청 (중복 신청 방지) |
+| PATCH | `/api/applications/[id]/accept` | 매치 수락 → 매치확정 + 채팅방 생성 + 알림 |
+| PATCH | `/api/applications/[id]/reject` | 매치 거절 + 신청자 알림 |
+| DELETE | `/api/applications/[id]/withdraw` | 대기중 신청 취소 (신청자 본인만) |
 
 ### 7.4 후기 API
 
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
 | GET | `/api/reviews` | 내가 받은 후기 목록 |
-| POST | `/api/reviews` | 후기 작성 |
+| POST | `/api/reviews` | 후기 작성 (UNIQUE 제약으로 중복 방지) |
 
-### 7.5 메시지 API
+### 7.5 1:1 매치 메시지 API
 
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
-| GET | `/api/messages` | 채팅방 목록 조회 |
+| GET | `/api/messages` | 내 채팅방 목록 조회 |
 | GET | `/api/messages/[roomId]` | 특정 채팅방 메시지 조회 |
 | POST | `/api/messages/[roomId]` | 메시지 전송 |
-| DELETE | `/api/messages/[roomId]` | 채팅방 나가기 (전체 삭제) |
+| DELETE | `/api/messages/[roomId]` | 채팅방 나가기 (message_rooms + messages CASCADE 삭제) |
 
 ### 7.6 알림 API
 
@@ -869,29 +951,39 @@ external_contests
 | PATCH | `/api/notifications/[id]/read` | 알림 읽음 처리 |
 | PATCH | `/api/notifications/read-all` | 전체 읽음 처리 |
 
-### 7.7 공모전 API (v2.0 신규)
+### 7.7 공모전 팀원 모집 API
 
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
-| GET | `/api/contest-matches` | 공모전 팀원 모집 목록 (모집중만) |
-| POST | `/api/contest-matches` | 공모전 팀원 모집 게시글 작성 |
-| POST | `/api/contest-matches/[id]/apply` | 공모전 팀원 신청 |
+| GET | `/api/contest-matches` | 팀원 모집 목록 (status='모집중'만) |
+| POST | `/api/contest-matches` | 팀원 모집 게시글 작성 + 채팅방 자동 생성 |
+| POST | `/api/contest-matches/[id]/apply` | 팀원 신청 (중복 방지) |
 | PATCH | `/api/contest-applications/[id]/accept` | 신청 수락 + 채팅방 자동 입장 + 자동 마감 처리 |
-| PATCH | `/api/contest-applications/[id]/reject` | 신청 거절 |
+| PATCH | `/api/contest-applications/[id]/reject` | 신청 거절 + 알림 |
+
+### 7.8 공모전 그룹 채팅 API
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
 | GET | `/api/contest-rooms` | 참여 중인 그룹 채팅방 목록 |
 | GET | `/api/contest-rooms/[id]/messages` | 그룹 채팅방 메시지 조회 |
-| POST | `/api/contest-rooms/[id]/messages` | 그룹 채팅방 메시지 전송 |
-| DELETE | `/api/contest-rooms/[id]/leave` | 그룹 채팅방 나가기 (멤버만 제거) |
-| GET | `/api/contest-rooms/[id]/invite` | 초대 가능한 멤버 목록 (수락된 신청자 중 미참여자) |
-| POST | `/api/contest-rooms/[id]/invite` | 팀원 초대 (팀장 + 수락된 신청자만 가능) |
-| GET | `/api/external-contests` | 자동 수집 외부 공모전 목록 (만료 필터 포함) |
+| POST | `/api/contest-rooms/[id]/messages` | 메시지 전송 (멤버 검증) |
+| DELETE | `/api/contest-rooms/[id]/leave` | 채팅방 나가기 (멤버십만 제거) |
+| GET | `/api/contest-rooms/[id]/invite` | 초대 가능 멤버 목록 (수락된 신청자 중 미참여자) |
+| POST | `/api/contest-rooms/[id]/invite` | 팀원 초대 (3중 보안 검증) |
 
-### 7.8 자동화 Cron API (v2.0 신규)
+### 7.9 외부 공모전 API
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| GET | `/api/external-contests` | 자동 수집 외부 공모전 목록 (deadline > yesterday) |
+
+### 7.10 자동화 Cron API
 
 | 메서드 | 경로 | 스케줄 | 설명 |
 |--------|------|--------|------|
-| GET | `/api/cron/sync-contests` | 0 15 * * * | 외부 공모전 자동 수집 + 만료 삭제 |
-| GET | `/api/cron/cleanup-matches` | 0 15 * * * | 경기 날짜 지난 매치 자동 삭제 |
+| GET | `/api/cron/sync-contests` | 매일 00:00 KST | 외부 공모전 자동 수집 + 만료 레코드 삭제 |
+| GET | `/api/cron/cleanup-matches` | 매일 00:00 KST | 경기 날짜 지난 매치 자동 삭제 |
 
 ---
 
@@ -904,7 +996,7 @@ external_contests
 | Primary (메인) | 충북대 청색 계열 | `#1E3A5F` |
 | Accent (강조) | 활동적인 주황색 | `#FF6B35` |
 | Success (수락) | 초록색 | `#22C55E` |
-| Danger (거절) | 빨간색 | `#EF4444` |
+| Danger (거절·삭제) | 빨간색 | `#EF4444` |
 | Background | 연한 회색 | `#F8FAFC` |
 | Card | 흰색 | `#FFFFFF` |
 | Contest (공모전) | 노란색 | `#EAB308` |
@@ -926,7 +1018,7 @@ external_contests
 | 중급 | `#FCD34D` (노랑) |
 | 고수 | `#F87171` (빨강) |
 
-### 8.4 공모전 지역별 색상 (v2.0 신규)
+### 8.4 공모전 지역별 색상
 
 | 지역 | 이모지 | 메인 색상 | 배경 색상 |
 |------|--------|-----------|-----------|
@@ -935,28 +1027,32 @@ external_contests
 | 세종특별자치시 | 🏛️ | `#7C3AED` | `#EDE9FE` |
 | 대전광역시 | ⚗️ | `#B45309` | `#FEF3C7` |
 
-### 8.5 남은 자리 표시 색상 (v2.0 신규)
+### 8.5 남은 자리 표시 색상 (ContestMatchCard)
 
 | 남은 자리 | 색상 |
 |-----------|------|
-| 3명 이상 | 초록 (green-100/700) |
-| 2명 이하 | 주황 (orange-100/600) |
-| 1명 이하 | 빨강 (red-100/600) |
+| 3명 이상 | 초록 `green-100/700` |
+| 2명 이하 | 주황 `orange-100/600` |
+| 1명 이하 | 빨강 `red-100/600` |
 
 ### 8.6 핵심 컴포넌트 목록
 
-- `MatchCard` — 매치 목록 카드 (종목 배지, 팀명, 수준, 신청 버튼, 신청 현황)
-- `PendingApplications` — 매치 신청 현황 (닉네임·실력·수락·거절 넓은 카드)
-- `ContestMatchCard` — 공모전 팀원 모집 카드 (실시간 남은 자리, 신청 현황)
-- `NotificationBell` — 헤더 알림 아이콘 + 배지
-- `NotificationDropdown` — 알림 목록 드롭다운 (수락/거절 버튼 포함)
-- `StarRating` — 별점 입력/표시 컴포넌트
-- `ChatBubble` — 채팅 메시지 말풍선
-- `FilterBar` — 종목/수준 필터 버튼 그룹
-- `ProfileCard` — 내 정보 카드
-- `Toast` — 실시간 알림 팝업
-- `MatchCalendar` — 경기 일정 달력 (공모전 이벤트 포함)
-- `InviteModal` — 팀원 초대 모달 (공모전 그룹 채팅용)
+| 컴포넌트 | 역할 |
+|----------|------|
+| `MatchCard` | 매치 목록 카드 — 신청 버튼, 수정 버튼(본인), 신청 현황(본인) |
+| `PendingApplications` | 매치 신청 현황 — 넓은 카드, 수락/거절 버튼 |
+| `ContestMatchCard` | 공모전 팀원 모집 카드 — 실시간 남은 자리, 신청 현황 |
+| `FilterBar` | 종목/수준 필터 버튼 그룹 |
+| `NotificationBell` | 헤더 알림 아이콘 + 배지 카운트 |
+| `NotificationDropdown` | 알림 목록 드롭다운 |
+| `StarRating` | 별점 입력/표시 컴포넌트 (1~5) |
+| `ChatBubble` | 채팅 메시지 말풍선 |
+| `ProfileCard` | 내 정보 카드 (닉네임 편집, 실력 즉시저장) |
+| `MatchCalendar` | 경기·공모전 일정 달력 |
+| `InviteModal` | 팀원 초대 모달 (공모전 그룹 채팅방용) |
+| `EmptyState` | 빈 목록 안내 컴포넌트 |
+| `PageSpinner` | 페이지 로딩 스피너 |
+| `Toast` | 실시간 알림 팝업 (react-hot-toast) |
 
 ---
 
@@ -970,15 +1066,16 @@ external_contests
 | 실시간 알림 지연 | 2초 이내 |
 | 채팅 메시지 전달 | 1초 이내 |
 | API 응답 시간 | 500ms 이내 |
-| 실시간 구독 폴링 폴백 | 3~10초 간격 |
+| 실시간 구독 폴링 폴백 | 3초 (채팅) / 10초 (신청 목록) |
 
 ### 9.2 보안
 
-- Supabase RLS로 인증된 사용자만 데이터 접근
-- JWT 토큰 만료 시 자동 갱신
+- Supabase RLS로 인증된 사용자만 데이터 접근 (서버 사이드 검증 병행)
+- JWT 토큰 만료 시 자동 갱신 (Supabase Auth 내장)
 - 학번 데이터는 마스킹 후 표시 (`202*****`)
 - 비밀번호는 Supabase Auth에서 bcrypt 해시 처리
-- 공모전 팀원 초대: 수락된 신청자(status='accepted')만 초대 가능 (3중 검증)
+- 매치글 수정/삭제: API에서 author_id = 현재 유저 ID 검증
+- 공모전 팀원 초대: 3중 검증 (팀장 여부 + 수락 상태 + 미참여 여부)
 - Cron Job: `CRON_SECRET` 환경변수로 무단 호출 방지
 
 ### 9.3 접근성 및 호환성
@@ -986,12 +1083,12 @@ external_contests
 | 항목 | 지원 범위 |
 |------|-----------|
 | 브라우저 | Chrome 90+, Firefox 88+, Safari 14+, Edge 90+ |
-| 기기 | PC, 태블릿, 모바일 (반응형) |
+| 기기 | PC, 태블릿, 모바일 (반응형 Tailwind) |
 | 최소 해상도 | 375px (모바일 기준) |
 
 ### 9.4 확장성
 
-- Supabase 무료 플랜 기준 설계, 트래픽 증가 시 Pro 플랜으로 전환
+- Supabase 무료 플랜 기준 설계, 트래픽 증가 시 Pro 플랜 전환
 - Next.js App Router 구조로 기능 단위 분리 및 확장 용이
 - Vercel Cron Jobs로 자동화 운영 비용 최소화
 - localStorage 기반 즐겨찾기로 DB 부하 없이 개인화 기능 제공
@@ -1003,14 +1100,14 @@ external_contests
 ### Phase 1 — 핵심 기능 (MVP)
 ```
 Week 1-2:
-  ✅ 프로젝트 세팅 (Next.js + Supabase + Vercel)
+  ✅ 프로젝트 세팅 (Next.js 14 + Supabase + Vercel)
   ✅ DB 스키마 및 RLS 설정
-  ✅ 회원가입 / 로그인 (학과 선택 포함)
+  ✅ 회원가입 (학과 선택 포함) / 로그인
 
 Week 3-4:
   ✅ 매치글 작성 (경기 날짜·시간 포함)
-  ✅ 매치 목록 + 필터
-  ✅ 매치 신청 + 알림 시스템 (Realtime)
+  ✅ 매치 목록 (종목·수준 필터)
+  ✅ 매치 신청 + 알림 시스템 (Supabase Realtime)
 ```
 
 ### Phase 2 — 커뮤니케이션
@@ -1018,7 +1115,7 @@ Week 3-4:
 Week 5-6:
   ✅ 매치 수락/거절 처리
   ✅ 1:1 매치 채팅 (Realtime + 폴링 폴백)
-  ✅ 내 정보 페이지 + 수정
+  ✅ 내 정보 페이지 + 프로필 수정
   ✅ 매치 취소 + 상대방 알림
 ```
 
@@ -1031,7 +1128,7 @@ Week 7-8:
   ✅ Vercel 배포 + 도메인 연결
 ```
 
-### Phase 4 — 공모전 기능 (v2.0)
+### Phase 4 — 공모전 기능
 ```
 Week 9-10:
   ✅ 공모전 목록 (충북·충남 지역)
@@ -1041,7 +1138,7 @@ Week 9-10:
   ✅ 실제 공모전 데이터 17개 입력 (4개 지역)
 ```
 
-### Phase 5 — 자동화 및 UX 개선 (v2.0)
+### Phase 5 — 자동화 및 UX 개선
 ```
 Week 11-12:
   ✅ 공모전 자동 만료 삭제 (마감일 +1일 기준)
@@ -1051,15 +1148,16 @@ Week 11-12:
   ✅ 내 정보 > 받은 신청·지원한 신청 탭 추가
   ✅ 실시간 남은 자리 표시 + 자동 마감
   ✅ 신청 취소 후 재신청 즉시 복원
-  ✅ 매치 신청 카드 UI 개선 (넓은 카드)
+  ✅ 매치 신청 카드 UI 개선 (PendingApplications 컴포넌트)
   ✅ 외부 공모전 자동 수집 Cron (올콘·링커리어)
 ```
 
 ### Phase 6 — 수정 기능 및 UX 고도화 (v2.1)
 ```
-  ✅ 매치글 수정 전용 페이지 (/match/[id]/edit) 추가
-  ✅ MatchCard 내 수정 버튼 → 수정 페이지 직접 이동
+  ✅ 매치글 수정 전용 페이지 /match/[id]/edit 추가
+  ✅ MatchCard '내 게시글' 영역에 수정 버튼(✏️) 추가
   ✅ 수정 완료 시 Realtime(event:UPDATE)으로 모든 사용자 화면 즉시 반영
+  ✅ 내 정보 > 내 매치글 탭에서도 수정 페이지로 이동
 ```
 
 ---
@@ -1070,12 +1168,14 @@ Week 11-12:
 |--------|--------|-----------|
 | 학번 검증 불완전 | 중 | 8자리 형식 + 입학연도 범위 검사로 최소 필터링 |
 | Supabase Realtime 연결 불안정 | 중 | 재연결 로직 구현, Polling 폴백 (3~10초) |
-| 동시 다중 매치 신청 충돌 | 중 | DB 트랜잭션 및 UNIQUE 제약으로 방지 |
+| 동시 다중 매치 신청 충돌 | 중 | DB UNIQUE 제약 + RLS로 방지 |
 | Supabase 무료 플랜 한계 | 낮 | 초기 소규모 서비스에 충분, 초과 시 유료 전환 |
-| 모바일 실시간 채팅 배터리 소모 | 낮 | 탭 비활성 시 구독 일시 해제 |
-| 외부 공모전 사이트 구조 변경 | 중 | 스크래핑 로직 정기 점검, 파싱 실패 시 빈 배열 반환으로 graceful 처리 |
+| 모바일 실시간 채팅 배터리 소모 | 낮 | 탭 비활성 시 구독 일시 해제 검토 |
+| 외부 공모전 사이트 구조 변경 | 중 | 스크래핑 로직 정기 점검, 실패 시 빈 배열 반환으로 graceful 처리 |
 | 팀원 초대 권한 우회 | 높 | 3중 검증 (팀장 여부 + 수락 상태 + 미참여 여부) |
 | localStorage 즐겨찾기 데이터 소실 | 낮 | 브라우저 캐시 삭제 시 리셋 허용 (서버 저장 불필요) |
+| Serverless timeout (매칭 로직) | 낮 | Vercel 함수 max 10초 이내 처리, 복잡 로직은 분리 |
+| 매치글 수정 중 상태 변경 충돌 | 낮 | 수정 API에서 현재 status 재확인 후 처리 |
 
 ---
 
@@ -1084,7 +1184,7 @@ Week 11-12:
 ### A. 환경 변수 목록
 
 ```env
-# Supabase
+# Supabase 연결
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
@@ -1092,7 +1192,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 # Vercel Cron 인증
 CRON_SECRET=
 
-# Next.js
+# Next.js (필요 시)
 NEXTAUTH_URL=
 NEXTAUTH_SECRET=
 ```
@@ -1103,81 +1203,102 @@ NEXTAUTH_SECRET=
 cbnumatch/
 ├── app/
 │   ├── (auth)/
-│   │   ├── login/
-│   │   └── signup/
+│   │   ├── login/page.tsx
+│   │   └── signup/page.tsx
 │   ├── (main)/
 │   │   ├── match/
-│   │   │   ├── page.tsx              ← 매치 목록
-│   │   │   ├── write/page.tsx        ← 매치글 작성
-│   │   │   ├── [id]/page.tsx         ← 매치 상세
-│   │   │   └── [id]/edit/page.tsx    ← 매치글 수정 ← v2.1 신규
+│   │   │   ├── page.tsx                    ← 매치 목록
+│   │   │   ├── write/page.tsx              ← 매치글 작성 (스포츠/공모전 탭)
+│   │   │   └── [id]/edit/page.tsx          ← 매치글 수정 (v2.1 신규)
 │   │   ├── contest/
-│   │   │   ├── page.tsx              ← 공모전 목록 + 즐겨찾기
-│   │   │   ├── matches/page.tsx      ← 공모전 팀원 모집 목록
-│   │   │   └── write/page.tsx        ← 팀원 모집 작성
-│   │   ├── review/page.tsx
+│   │   │   ├── page.tsx                    ← 공모전 목록 (즐겨찾기 + 지역별)
+│   │   │   └── matches/page.tsx            ← 공모전 팀원 모집 목록
+│   │   ├── review/page.tsx                 ← 팀 후기
 │   │   ├── messages/
-│   │   │   ├── page.tsx              ← 메시지 허브 (탭)
-│   │   │   ├── [roomId]/page.tsx     ← 1:1 매치 채팅
-│   │   │   └── contest/[roomId]/page.tsx ← 공모전 그룹 채팅
-│   │   ├── profile/page.tsx
-│   │   └── notifications/page.tsx
+│   │   │   ├── page.tsx                    ← 메시지 허브 (탭)
+│   │   │   ├── [roomId]/page.tsx           ← 1:1 매치 채팅
+│   │   │   └── contest/[roomId]/page.tsx   ← 공모전 그룹 채팅
+│   │   ├── profile/page.tsx                ← 내 정보 (7탭)
+│   │   └── notifications/page.tsx          ← 알림 센터
 │   └── api/
 │       ├── auth/
+│       │   ├── signup/route.ts
+│       │   ├── login/route.ts
+│       │   ├── logout/route.ts
+│       │   ├── check-username/route.ts
+│       │   └── check-nickname/route.ts
 │       ├── matches/
+│       │   ├── route.ts                    ← GET (목록) / POST (작성)
 │       │   └── [id]/
-│       │       ├── apply/route.ts
-│       │       ├── cancel/route.ts
-│       │       └── route.ts
+│       │       ├── route.ts                ← PUT (수정) / DELETE (삭제)
+│       │       ├── apply/route.ts          ← POST (신청)
+│       │       └── cancel/route.ts         ← PATCH (확정 매치 취소)
 │       ├── applications/
 │       │   └── [id]/
-│       │       ├── accept/route.ts
-│       │       ├── reject/route.ts
-│       │       └── withdraw/route.ts  ← v2.0 신규
+│       │       ├── accept/route.ts         ← PATCH (수락)
+│       │       ├── reject/route.ts         ← PATCH (거절)
+│       │       └── withdraw/route.ts       ← DELETE (취소)
 │       ├── contest-matches/
-│       │   └── [id]/apply/route.ts
+│       │   ├── route.ts                    ← GET / POST
+│       │   └── [id]/apply/route.ts         ← POST (신청)
 │       ├── contest-applications/
 │       │   └── [id]/
-│       │       ├── accept/route.ts
-│       │       └── reject/route.ts
+│       │       ├── accept/route.ts         ← PATCH (수락 + 자동 마감)
+│       │       └── reject/route.ts         ← PATCH (거절)
 │       ├── contest-rooms/
+│       │   ├── route.ts                    ← GET (내 그룹 채팅방 목록)
 │       │   └── [id]/
-│       │       ├── messages/route.ts
-│       │       ├── leave/route.ts
-│       │       └── invite/route.ts    ← v2.0 신규
-│       ├── external-contests/route.ts
-│       ├── reviews/
+│       │       ├── messages/route.ts       ← GET / POST
+│       │       ├── leave/route.ts          ← DELETE (나가기)
+│       │       └── invite/route.ts         ← GET (초대 목록) / POST (초대)
+│       ├── external-contests/route.ts      ← GET
+│       ├── reviews/route.ts                ← GET / POST
 │       ├── messages/
+│       │   ├── route.ts                    ← GET (목록)
+│       │   └── [roomId]/route.ts           ← GET / POST / DELETE
 │       ├── notifications/
+│       │   ├── route.ts                    ← GET
+│       │   ├── [id]/read/route.ts          ← PATCH
+│       │   └── read-all/route.ts           ← PATCH
 │       └── cron/
-│           ├── sync-contests/route.ts ← v2.0 신규
-│           └── cleanup-matches/route.ts ← v2.0 신규
+│           ├── sync-contests/route.ts      ← 외부 공모전 수집
+│           └── cleanup-matches/route.ts    ← 만료 매치 삭제
 ├── components/
-│   ├── ui/                           ← 공통 UI 컴포넌트
-│   ├── match/                        ← 매치 관련 컴포넌트
-│   │   ├── MatchCard.tsx
-│   │   ├── PendingApplications.tsx   ← v2.0 UI 개선
+│   ├── ui/
+│   │   ├── Badge.tsx                       ← SportBadge / LevelBadge / StatusBadge
+│   │   ├── Calendar.tsx                    ← MatchCalendar
+│   │   ├── EmptyState.tsx
+│   │   └── Spinner.tsx
+│   ├── match/
+│   │   ├── MatchCard.tsx                   ← 수정 버튼 포함 (v2.1)
+│   │   ├── PendingApplications.tsx
 │   │   └── FilterBar.tsx
 │   ├── contest/
-│   │   └── ContestMatchCard.tsx      ← v2.0 신규 (실시간 남은 자리)
-│   ├── chat/                         ← 채팅 컴포넌트
+│   │   └── ContestMatchCard.tsx            ← 실시간 남은 자리
+│   ├── chat/
 │   ├── review/
-│   └── layout/                       ← 레이아웃 컴포넌트
+│   │   └── StarRating.tsx
+│   ├── notifications/
+│   │   ├── NotificationBell.tsx
+│   │   └── NotificationDropdown.tsx
+│   └── layout/
+│       ├── Header.tsx
+│       └── BottomNav.tsx
 ├── data/
-│   └── contests.ts                   ← 정적 공모전 데이터 (4개 지역, 17개)
+│   └── contests.ts                         ← 정적 공모전 데이터 (4개 지역, 17개)
 ├── lib/
 │   ├── supabase/
-│   │   ├── client.ts
-│   │   ├── server.ts
-│   │   └── admin.ts
-│   └── utils/
+│   │   ├── client.ts                       ← 브라우저용 Supabase 클라이언트
+│   │   ├── server.ts                       ← 서버 컴포넌트용
+│   │   └── admin.ts                        ← SERVICE_ROLE_KEY (RLS 우회)
+│   └── utils.ts                            ← formatDate, maskStudentId 등
 ├── types/
-│   └── database.ts
-├── vercel.json                        ← Cron 설정
+│   └── database.ts                         ← Match, Profile, Contest 등 타입 정의
+├── vercel.json                             ← Cron Jobs 설정
 └── public/
 ```
 
-### C. 공모전 정적 데이터 현황 (v2.0)
+### C. 공모전 정적 데이터 현황
 
 | 지역 | 게시물 수 | 주요 공모전 |
 |------|-----------|-------------|
@@ -1185,7 +1306,18 @@ cbnumatch/
 | 충청남도 | 4개 | 충남관광 사진영상, 유니버시아드 디자인, 충남 방문의 해 그림, 충청U대회 숏폼 |
 | 세종특별자치시 | 3개 | 지자체 캐릭터 페스티벌, 유니버시아드 디자인, 충청U대회 숏폼 |
 | 대전광역시 | 7개 | 공공디자인 공모전, 대전부르스 창작가요제, 유니버시아드 디자인, 대청호오백리길 사진, 대전관광사진, 넥스트코드 작가 공모, 충청U대회 숏폼 |
-| **합계** | **17개** | - |
+| **합계** | **17개** | — |
+
+### D. Supabase Realtime 구독 현황
+
+| 페이지 / 컴포넌트 | 채널명 | 이벤트 | 목적 |
+|------------------|--------|--------|------|
+| `/match` 페이지 | `matches-list` | `*` (INSERT/UPDATE/DELETE) | 매치 목록 갱신 (수정 포함) |
+| `/match` 페이지 | `match-applications-list` | `DELETE` | 신청 취소 → 재신청 버튼 복원 |
+| `ContestMatchCard` | `contest-match-update:[id]` | `UPDATE` | 실시간 남은 자리 갱신 |
+| `ContestMatchCard` | `contest-apps:[id]` | `INSERT` | 신청 현황 갱신 (작성자용) |
+| 그룹 채팅방 | `contest-chat:[roomId]` | `INSERT` | 신규 메시지 수신 |
+| 알림 시스템 | `notifications` (필터) | `INSERT` | 실시간 알림 수신 |
 
 ---
 
