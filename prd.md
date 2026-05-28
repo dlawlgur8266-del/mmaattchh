@@ -1,10 +1,10 @@
 # 충북match — Product Requirements Document (PRD)
 
-> **버전**: v2.1  
+> **버전**: v2.2  
 > **최초 작성일**: 2026-05-26  
 > **최종 수정일**: 2026-05-28  
 > **작성자**: 충북match 개발팀  
-> **상태**: 업데이트 완료 (v1.0 → v2.1)
+> **상태**: 업데이트 완료 (v2.1 → v2.2)
 
 ---
 
@@ -15,6 +15,7 @@
 | v1.0 | 2026-05-26 | 초안 작성 — MVP 기능 정의 |
 | v2.0 | 2026-05-28 | 공모전 기능, 그룹 채팅, 신청 관리 UI, 자동화 전면 추가 |
 | v2.1 | 2026-05-28 | 매치글 수정 기능 추가 (전용 페이지 + Realtime 즉시 반영) |
+| v2.2 | 2026-05-28 | 개인 프로필 시스템, 스포츠 시설 예약, 신고 시스템, Claude AI 기능, 관리자 대시보드, 크롤링 확장 추가 |
 
 ---
 
@@ -25,6 +26,13 @@
 3. [사용자 페르소나](#3-사용자-페르소나)
 4. [정보 아키텍처](#4-정보-아키텍처)
 5. [기능 요구사항 상세](#5-기능-요구사항-상세)
+   - 5.1~5.11: 기존 기능 (매치, 공모전, 메시지, 알림 등)
+   - 5.12: 스포츠 시설 예약
+   - 5.13: 개인 프로필 시스템
+   - 5.14: 신고 시스템
+   - 5.15: Claude AI 기능
+   - 5.16: 관리자 대시보드
+   - 5.17: 크롤링 시스템 확장
 6. [데이터베이스 설계](#6-데이터베이스-설계)
 7. [API 설계](#7-api-설계)
 8. [UI/UX 가이드라인](#8-uiux-가이드라인)
@@ -50,6 +58,8 @@
 | 충북대 전용 | 학번 인증으로 재학생만 이용 가능한 신뢰도 높은 커뮤니티 |
 | 공모전 팀 매칭 | 충청권 공모전 정보 제공 + 팀원 모집·그룹 채팅 연동 |
 | 자동화 운영 | 마감일 기반 게시물 자동 만료·삭제로 운영 비용 최소화 |
+| AI 매칭 추천 | Claude API로 공모전 요약·매칭 추천 이유·프로필 작성 도우미 제공 |
+| 시설 예약 연동 | 충북대 스포츠 시설 예약 현황 자동 수집·표시 |
 
 ### 1.3 기술 스택
 
@@ -62,6 +72,9 @@
 | 실시간 | Supabase Realtime (WebSocket) | Postgres Changes 구독, 폴링 폴백 병행 |
 | 배포 | Vercel | Next.js 공식 플랫폼, Edge Network, Cron Jobs |
 | Admin | Supabase Admin Client | RLS 우회 서버 사이드 작업 |
+| AI | Anthropic Claude API (claude-sonnet-4-6) | 공모전 요약, 매칭 추천, 프로필 작성 보조 |
+| 크롤링 | Python (BeautifulSoup / Playwright) | GitHub Actions 또는 Vercel Cron; 공모전·시설 예약 자동 수집 |
+| 스토리지 | Supabase Storage | 아바타 이미지 업로드 |
 
 ---
 
@@ -138,12 +151,14 @@
     ├── /match/[id]/edit           ← 매치글 수정 (작성자 전용) ← v2.1 신규
     ├── /contest                   ← 공모전 목록 (즐겨찾기 + 지역별 탭)
     ├── /contest/matches           ← 공모전 팀원 모집 목록 (실시간 남은 자리)
+    ├── /sports                    ← 스포츠 시설 예약 현황 + 파트너 찾기 ← v2.2 신규
     ├── /review                    ← 팀 후기 목록 / 별점 작성
     ├── /messages                  ← 메시지 허브 (매치 채팅 탭 / 공모전 팀 채팅 탭)
     ├── /messages/[roomId]         ← 1:1 매치 채팅방
     ├── /messages/contest/[roomId] ← 공모전 팀 그룹 채팅방 (팀원 초대 포함)
-    ├── /profile                   ← 내 정보 (7개 탭)
-    └── /notifications             ← 알림 센터
+    ├── /profile                   ← 내 정보 (7개 탭 + 개인 프로필 탭)
+    ├── /notifications             ← 알림 센터
+    └── /admin                     ← 관리자 대시보드 (관리자 role만 접근) ← v2.2 신규
 ```
 
 ---
@@ -209,6 +224,36 @@
 - Supabase 클라이언트가 localStorage에 세션 자동 저장
 - 페이지 새로고침 시 세션 자동 복구
 - 로그아웃 시 세션 삭제 + `/login` 리다이렉트
+- "로그인 상태 유지" 체크박스: 체크 시 세션 만료 7일, 미체크 시 브라우저 종료 시 만료
+
+#### 비밀번호 찾기
+
+```
+1. 로그인 페이지 하단 "비밀번호 찾기" 링크 클릭
+2. 가입 시 사용한 아이디 입력
+3. 시스템이 해당 아이디의 가상 이메일(아이디@cbnu.match)로 재설정 링크 발송
+4. 링크 클릭 → 새 비밀번호 설정 페이지로 이동
+5. 새 비밀번호 입력 (최소 8자, 영문+숫자) → 저장 → 로그인 페이지 리다이렉트
+```
+
+#### 회원탈퇴
+
+```
+경로: /profile > 계정 설정 > 회원탈퇴
+
+절차:
+  1. 탈퇴 의사 확인 다이얼로그 표시
+  2. 확인 클릭
+  3. 모든 게시글(matches, contest_matches) 비공개 처리
+  4. 개인식별 정보(이름, 학번) 30일 후 자동 삭제
+     (Supabase Edge Function scheduled trigger 처리)
+  5. profiles.is_active = false 처리 → 목록 노출 차단
+  6. 탈퇴 완료 → 세션 삭제 → /login 리다이렉트
+
+재가입 정책:
+  - 탈퇴 후 동일 아이디로 재가입 가능
+  - 재가입 시 이전 데이터(채팅 이력, 신청 기록) 복구 불가
+```
 
 ---
 
@@ -735,6 +780,281 @@ Supabase Realtime 구독
 
 ---
 
+### 5.12 스포츠 시설 예약 (/sports) ← v2.2 신규
+
+#### 유저 스토리
+> "충북대 스포츠 시설의 예약 가능 시간을 확인하고, 같이 운동할 파트너를 찾고 싶다."
+
+#### 화면 구성
+
+```
+┌───────────────────────────────────────────────────┐
+│  종목 탭: [풋살] [농구] [테니스] [소운동장] [종합운동장]  │
+├───────────────────────────────────────────────────┤
+│  날짜 선택 캘린더                                    │
+├───────────────────────────────────────────────────┤
+│  시간대별 예약 현황 타임라인                           │
+│  ┌─ 08:00 ─────┐  ┌─ 09:00 ─────┐               │
+│  │  예약 완료   │  │  예약 가능   │               │
+│  └─────────────┘  └─────────────┘               │
+│  [예약 가능] 슬롯 클릭 → 파트너 찾기 화면            │
+└───────────────────────────────────────────────────┘
+```
+
+#### 파트너 찾기 화면
+
+```
+- 선택한 시설·날짜·시간 요약 표시
+- 스포츠 개인 프로필(sports_profiles)이 공개된 유저 카드 목록
+- 유저 카드: 닉네임 / 나이 / 성별 / 관심 종목 / 운동 경력 / 선출 여부 / 자기소개
+- [매칭 신청] 버튼 → 신청 메시지 입력(200자 이내) → 개인 매칭 요청 생성
+```
+
+#### 시설 목록
+
+| 시설 ID | 시설명 |
+|---------|--------|
+| `futsal_a` | 풋살장 A |
+| `futsal_b` | 풋살장 B |
+| `basketball_a` | 농구장 A |
+| `basketball_b` | 농구장 B |
+| `tennis_a` ~ `tennis_e` | 테니스장 A~E |
+| `small_field` | 소운동장 |
+| `main_field` | 종합운동장 |
+
+#### 예약 현황 자동 수집 (크롤링)
+
+```
+대상: 충북대학교 학생생활관/진흥원 시설 예약 시스템 공개 페이지
+수집 주기: 매 1시간 (GitHub Actions cron)
+수집 필드: 시설명, 예약 날짜, 시작/종료 시간, 예약 상태
+처리: 기존 레코드와 비교 → 변경 시 UPDATE, 신규 시 INSERT
+실패 시: 마지막 수집 데이터 유지 + "현재 정보를 불러올 수 없습니다" 안내 표시
+```
+
+---
+
+### 5.13 개인 프로필 시스템 (/profile) ← v2.2 신규
+
+#### 유저 스토리
+> "공모전 또는 스포츠 매칭을 위한 상세 프로필을 등록하고, 다른 사람의 프로필을 보고 직접 매칭을 신청하고 싶다."
+
+#### 공모전 개인 프로필 모달
+
+```
+입력 항목:
+  - 학과 (텍스트 입력)
+  - 성별 (male / female / other)
+  - 나이 (숫자, 18~40)
+  - 공모전 참여 횟수 (숫자)
+  - 자격증 (태그 입력, 최대 10개)
+  - 관심 분야 (다중 선택 — 마케팅·아이디어 / 영상·UCC·사진 / 디자인 / 문학·글 /
+               IT·소프트웨어 / 예체능·음악·미술 / 학술·창업·논술)
+  - 자기소개 (300자 이내)
+  - 프로필 공개 여부 토글 (기본: 공개)
+
+저장: PUT /api/profile/contest → contest_profiles UPSERT
+```
+
+#### 스포츠 개인 프로필 모달
+
+```
+입력 항목:
+  - 성별 (male / female / other)
+  - 나이 (숫자, 18~40)
+  - 관심 종목 (다중 선택 — 풋살 / 농구 / 테니스 / 기타)
+  - 운동 경력 (년 단위 숫자)
+  - 선출 여부 토글 (기본: 비선출)
+  - 자기소개 (300자 이내)
+  - 프로필 공개 여부 토글 (기본: 공개)
+
+저장: PUT /api/profile/sports → sports_profiles UPSERT
+```
+
+#### 개인 간 매칭 신청 플로우
+
+```
+[매칭 신청] 클릭 (상대방 프로필 카드)
+    │
+    ├─ 본인? → 신청 불가
+    ├─ 이미 대기중 신청 존재? → "이미 신청한 상대입니다." toast
+    │
+    └─ 신청 메시지 입력(200자 이내) → 확인 클릭
+        ↓
+        POST /api/profile-matches
+        → profile_matches INSERT (status: 'pending')
+        → notifications INSERT (수신자 알림)
+        ↓
+        수신자 /profile > 받은 신청 탭에서 처리
+            ├─ 수락 → status='accepted', 양측 이메일 공개 알림
+            └─ 거절 → status='rejected', 신청자 알림
+```
+
+#### 아바타 이미지 업로드
+
+```
+/profile > 프로필 카드 내 아바타 영역 클릭
+→ 파일 선택 (JPG/PNG, 최대 2MB)
+→ POST /api/profile/avatar → Supabase Storage 업로드
+→ profiles.avatar_url 업데이트
+→ 헤더·프로필 카드 즉시 반영
+```
+
+---
+
+### 5.14 신고 시스템 ← v2.2 신규
+
+#### 유저 스토리
+> "불쾌하거나 허위 정보를 가진 유저를 신고해 신뢰 있는 커뮤니티를 유지하고 싶다."
+
+#### 신고 접수 플로우
+
+```
+유저 카드 내 [신고] 버튼 클릭
+    ↓
+신고 사유 선택 (단일 선택):
+  - 불쾌한 언행
+  - 허위 정보
+  - 스팸
+  - 기타
+
+상세 내용 입력 (선택, 최대 500자)
+    ↓
+POST /api/reports
+→ reports INSERT (status: 'pending')
+→ "신고가 접수되었습니다." toast
+```
+
+#### 자동 제재 정책
+
+```
+신고 누적 3회 이상:
+  1. profiles.is_active = false (자동 비공개)
+  2. 모든 게시글 목록 노출 차단
+  3. 관리자 알림 발송
+
+관리자 검토 후:
+  - 1차 위반: 경고 + 프로필 수정 요청
+  - 2차 위반: 30일 계정 정지
+  - 3차 위반: 영구 퇴출
+```
+
+---
+
+### 5.15 Claude AI 기능 ← v2.2 신규
+
+#### 기능 목록
+
+| 기능 | 호출 시점 | 처리 방식 |
+|------|-----------|-----------|
+| 공모전 요약 | 공모전 상세 페이지 최초 로드 | 크롤링한 공모전 본문을 2~3줄로 요약 |
+| 매칭 추천 이유 | 프로필 매칭 신청 시 | 두 유저 프로필 비교 → "이 사람과 잘 맞는 이유" 한 줄 생성 |
+| 프로필 작성 도우미 | 개인 프로필 자기소개 작성 시 | 입력한 정보 기반 자기소개 초안 생성 |
+
+#### 구현 원칙
+
+```
+- 모든 Claude API 호출은 서버 사이드 전용 (ANTHROPIC_API_KEY 클라이언트 노출 금지)
+- API Route: POST /api/ai/summarize, POST /api/ai/match-reason, POST /api/ai/profile-draft
+- Claude API 오류 발생 시: AI 기능만 비활성화, 나머지 서비스 정상 운영
+- 호출 빈도 최소화: 공모전 요약은 최초 1회만 생성 후 DB 캐시 (external_contests.summary 컬럼)
+- 모델: claude-sonnet-4-6 (최신 Sonnet 모델 사용)
+```
+
+---
+
+### 5.16 관리자 대시보드 (/admin) ← v2.2 신규
+
+#### 접근 조건
+
+```
+profiles.role = 'admin' 인 사용자만 접근 가능
+미인증 또는 일반 사용자 접근 시 /match 리다이렉트
+```
+
+#### 주요 기능
+
+| 메뉴 | 내용 |
+|------|------|
+| 신고 관리 | pending 신고 목록, 신고자·피신고자 정보, 처리(경고/정지/퇴출/기각) |
+| 회원 관리 | 전체 회원 목록, is_active 토글, role 변경 |
+| 공모전 데이터 | 크롤링된 공모전 목록, 수동 is_active 처리 |
+| 크롤링 현황 | 마지막 크롤링 시각, 실패 로그 확인 |
+
+---
+
+### 5.17 크롤링 시스템 확장 ← v2.2 신규
+
+#### 공모전 크롤링 대상 확장
+
+```
+기존 (v2.1): 올콘, 링커리어
+추가 (v2.2): 공모전닷컴(contestkorea.com), 위비티(wevity.com)
+
+수집 필드: 제목, 주최기관, 분야, 접수 시작일, 마감일, 시상내역, 지원 대상, URL, 썸네일
+
+분야 매핑 규칙:
+  marketing  ← 마케팅, 아이디어, 광고, 홍보
+  video      ← 영상, UCC, 사진, 영화
+  design     ← 디자인, UI/UX, 캐릭터
+  literature ← 문학, 글쓰기, 시, 소설, 수필
+  it         ← IT, 소프트웨어, 개발, 해커톤, 앱
+  arts       ← 예체능, 음악, 미술, 공연
+  academic   ← 학술, 창업, 논술, 스타트업
+```
+
+#### GitHub Actions Workflow (공모전 크롤링)
+
+```yaml
+name: Contest Crawl
+on:
+  schedule:
+    - cron: '0 17 * * *'  # UTC 17:00 = KST 02:00
+  workflow_dispatch:
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r crawlers/requirements.txt
+      - run: python crawlers/contest_crawler.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+```
+
+#### GitHub Actions Workflow (시설 예약 현황)
+
+```yaml
+name: Sports Reservation Crawl
+on:
+  schedule:
+    - cron: '0 * * * *'  # 매 1시간마다
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r crawlers/requirements.txt
+      - run: python crawlers/reservation_crawler.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+```
+
+> **주의**: 크롤링 가능 여부는 로그인 불필요한 공개 페이지 기준 사전 확인 필요.  
+> 사이트 구조 변경 시 크롤러 수동 업데이트 필요. 실패 시 기존 DB 데이터 유지.
+
+---
+
 ## 6. 데이터베이스 설계
 
 ### 6.1 ERD (Entity Relationship Diagram)
@@ -752,6 +1072,9 @@ profiles
     ├─ skill_level   ENUM  초급/중급/고수
     ├─ department    TEXT
     ├─ contest_count INTEGER  DEFAULT 0
+    ├─ avatar_url    TEXT  (Supabase Storage URL)
+    ├─ role          TEXT  DEFAULT 'user'  CHECK(user/admin)
+    ├─ is_active     BOOLEAN  DEFAULT true
     ├─ created_at    TIMESTAMPTZ
     └─ updated_at    TIMESTAMPTZ
 
@@ -866,9 +1189,74 @@ external_contests
     ├─ category    TEXT
     ├─ organizer   TEXT
     ├─ deadline    DATE
-    ├─ source      TEXT  ('all-con' | 'linkareer')
+    ├─ source      TEXT  ('all-con' | 'linkareer' | 'contestkorea' | 'wevity')
     ├─ description TEXT
+    ├─ summary     TEXT  (Claude AI 요약, 최초 1회 캐시)
+    ├─ prize       TEXT
+    ├─ target      TEXT
+    ├─ thumbnail_url TEXT
     └─ created_at  TIMESTAMPTZ
+
+── 개인 프로필 (v2.2 신규) ──────────────────────────────
+
+profiles ──1──1 contest_profiles
+    ├─ id              UUID  PK
+    ├─ user_id         UUID  FK → profiles.id  UNIQUE
+    ├─ department      TEXT
+    ├─ gender          TEXT  CHECK(male/female/other)
+    ├─ age             INTEGER  CHECK(18~40)
+    ├─ contest_count   INTEGER  DEFAULT 0
+    ├─ certificates    TEXT[]
+    ├─ fields          TEXT[]
+    ├─ intro           TEXT  (300자 이내)
+    ├─ is_visible      BOOLEAN  DEFAULT true
+    ├─ created_at      TIMESTAMPTZ
+    └─ updated_at      TIMESTAMPTZ
+
+profiles ──1──1 sports_profiles
+    ├─ id              UUID  PK
+    ├─ user_id         UUID  FK → profiles.id  UNIQUE
+    ├─ gender          TEXT  CHECK(male/female/other)
+    ├─ age             INTEGER  CHECK(18~40)
+    ├─ sports          TEXT[]
+    ├─ career_years    INTEGER  DEFAULT 0
+    ├─ is_pro          BOOLEAN  DEFAULT false
+    ├─ intro           TEXT  (300자 이내)
+    ├─ is_visible      BOOLEAN  DEFAULT true
+    ├─ created_at      TIMESTAMPTZ
+    └─ updated_at      TIMESTAMPTZ
+
+sports_reservations (시설 예약 현황 - 크롤링 데이터)
+    ├─ id               UUID  PK
+    ├─ facility         TEXT  CHECK(futsal_a/futsal_b/basketball_a/basketball_b/
+    │                              tennis_a/tennis_b/tennis_c/tennis_d/tennis_e/
+    │                              small_field/main_field)
+    ├─ reservation_date DATE
+    ├─ start_time       TIME
+    ├─ end_time         TIME
+    ├─ status           TEXT  CHECK(available/reserved/closed)
+    ├─ last_crawled_at  TIMESTAMPTZ
+    UNIQUE(facility, reservation_date, start_time)
+
+profiles ──1──< profile_matches (개인 간 매칭 요청)
+    ├─ id            UUID  PK
+    ├─ type          TEXT  CHECK(contest/sports)
+    ├─ requester_id  UUID  FK → profiles.id
+    ├─ receiver_id   UUID  FK → profiles.id
+    ├─ message       TEXT  (200자 이내)
+    ├─ status        TEXT  CHECK(pending/accepted/rejected/cancelled)
+    ├─ created_at    TIMESTAMPTZ
+    └─ updated_at    TIMESTAMPTZ
+    UNIQUE(requester_id, receiver_id, type)
+
+profiles ──1──< reports (신고)
+    ├─ id           UUID  PK
+    ├─ reporter_id  UUID  FK → profiles.id
+    ├─ reported_id  UUID  FK → profiles.id
+    ├─ reason       TEXT  CHECK('불쾌한 언행'/'허위 정보'/'스팸'/'기타')
+    ├─ detail       TEXT
+    ├─ status       TEXT  CHECK(pending/resolved/dismissed)
+    └─ created_at   TIMESTAMPTZ
 ```
 
 ### 6.2 Row Level Security (RLS) 정책
@@ -888,6 +1276,11 @@ external_contests
 | `contest_chat_members` | 멤버만 | 시스템(3중 검증) | 불가 | 본인 |
 | `contest_chat_messages` | 멤버만 | 멤버 | 불가 | 불가 |
 | `external_contests` | 전체 허용 | admin만 | admin만 | admin만 |
+| `contest_profiles` | is_visible=true 전체 / 본인 전체 | 본인만 | 본인만 | 본인만 |
+| `sports_profiles` | is_visible=true 전체 / 본인 전체 | 본인만 | 본인만 | 본인만 |
+| `sports_reservations` | 전체 허용 | admin만(크롤러) | admin만(크롤러) | admin만(크롤러) |
+| `profile_matches` | 당사자(requester/receiver)만 | 로그인 유저 | 당사자 | 신청자(본인) |
+| `reports` | 신고자 본인 / admin | 로그인 유저 | admin만 | 불가 |
 
 > RLS를 우회해야 하는 서버 작업(수락 처리, 알림 삽입 등)은 supabaseAdmin (SERVICE_ROLE_KEY) 클라이언트 사용
 
@@ -978,7 +1371,52 @@ external_contests
 |--------|------|------|
 | GET | `/api/external-contests` | 자동 수집 외부 공모전 목록 (deadline > yesterday) |
 
-### 7.10 자동화 Cron API
+### 7.10 개인 프로필 API (v2.2 신규)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| GET | `/api/profile/contest` | 내 공모전 개인 프로필 조회 |
+| PUT | `/api/profile/contest` | 공모전 개인 프로필 저장 (UPSERT) |
+| GET | `/api/profile/sports` | 내 스포츠 개인 프로필 조회 |
+| PUT | `/api/profile/sports` | 스포츠 개인 프로필 저장 (UPSERT) |
+| POST | `/api/profile/avatar` | 아바타 이미지 업로드 (Supabase Storage) |
+| GET | `/api/users/[id]/contest-profile` | 타 유저 공모전 프로필 조회 (is_visible=true만) |
+| GET | `/api/users/[id]/sports-profile` | 타 유저 스포츠 프로필 조회 (is_visible=true만) |
+
+### 7.11 스포츠 시설 예약 API (v2.2 신규)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| GET | `/api/sports/reservations` | 시설 예약 현황 조회 (날짜·시설 필터) |
+| GET | `/api/sports/partners` | 해당 시설·시간대 매칭 가능 파트너 목록 |
+
+### 7.12 개인 매칭 API (v2.2 신규)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| GET | `/api/profile-matches` | 내 개인 매칭 목록 (보낸/받은) |
+| POST | `/api/profile-matches` | 개인 매칭 신청 (중복 방지) |
+| PATCH | `/api/profile-matches/[id]/accept` | 매칭 수락 + 알림 |
+| PATCH | `/api/profile-matches/[id]/reject` | 매칭 거절 + 알림 |
+| DELETE | `/api/profile-matches/[id]` | 매칭 신청 취소 |
+
+### 7.13 신고 API (v2.2 신규)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| POST | `/api/reports` | 신고 접수 |
+| GET | `/api/admin/reports` | 신고 목록 (관리자 전용) |
+| PATCH | `/api/admin/reports/[id]` | 신고 처리 (관리자 전용) |
+
+### 7.14 Claude AI API (v2.2 신규)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| POST | `/api/ai/summarize` | 공모전 요약 생성 (DB 캐시 우선) |
+| POST | `/api/ai/match-reason` | 매칭 추천 이유 생성 |
+| POST | `/api/ai/profile-draft` | 자기소개 초안 생성 |
+
+### 7.15 자동화 Cron API
 
 | 메서드 | 경로 | 스케줄 | 설명 |
 |--------|------|--------|------|
@@ -1160,6 +1598,28 @@ Week 11-12:
   ✅ 내 정보 > 내 매치글 탭에서도 수정 페이지로 이동
 ```
 
+### Phase 7 — 개인 프로필 & 시설 예약 (v2.2)
+```
+  □ 개인 공모전/스포츠 프로필 모달 (contest_profiles, sports_profiles)
+  □ 스포츠 시설 예약 현황 페이지 (/sports) + 타임라인 UI
+  □ 파트너 찾기 화면 (스포츠 개인 프로필 기반)
+  □ 개인 간 매칭 신청·수락·거절 (profile_matches)
+  □ 아바타 이미지 업로드 (Supabase Storage)
+  □ 시설 예약 현황 크롤러 (GitHub Actions, 1시간 주기)
+  □ 공모전 크롤러 확장 (contestkorea, wevity 추가)
+```
+
+### Phase 8 — AI & 신고 & 관리자 (v2.2)
+```
+  □ Claude AI 공모전 요약 (DB 캐시)
+  □ Claude AI 매칭 추천 이유 생성
+  □ Claude AI 프로필 작성 도우미
+  □ 신고 시스템 (신고 접수, 3회 자동 비공개)
+  □ 관리자 대시보드 (/admin) — 신고 처리, 회원 관리
+  □ 비밀번호 찾기 (이메일 재설정 링크)
+  □ 회원탈퇴 (30일 데이터 보존 후 자동 삭제)
+```
+
 ---
 
 ## 11. 리스크 및 제약사항
@@ -1176,6 +1636,11 @@ Week 11-12:
 | localStorage 즐겨찾기 데이터 소실 | 낮 | 브라우저 캐시 삭제 시 리셋 허용 (서버 저장 불필요) |
 | Serverless timeout (매칭 로직) | 낮 | Vercel 함수 max 10초 이내 처리, 복잡 로직은 분리 |
 | 매치글 수정 중 상태 변경 충돌 | 낮 | 수정 API에서 현재 status 재확인 후 처리 |
+| 시설 예약 사이트 구조 변경 | 중 | 크롤러 정기 점검, 실패 시 마지막 수집 데이터 유지 |
+| Claude API 비용 초과 | 중 | 공모전 요약은 최초 1회만 생성 후 DB 캐시, 호출 횟수 모니터링 |
+| 신고 어뷰징 (허위 신고) | 중 | 관리자 최종 검토 필수, 자동 처리는 비공개까지만 |
+| 아바타 이미지 용량 초과 | 낮 | 클라이언트 2MB 제한 + 서버 재검증 |
+| 개인정보 (성별·나이) 노출 | 중 | is_visible=false 설정 시 다른 유저에게 완전 비노출 |
 
 ---
 
@@ -1191,6 +1656,9 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 # Vercel Cron 인증
 CRON_SECRET=
+
+# Anthropic Claude API (서버 사이드 전용 — 클라이언트 노출 금지)
+ANTHROPIC_API_KEY=
 
 # Next.js (필요 시)
 NEXTAUTH_URL=
@@ -1213,6 +1681,11 @@ cbnumatch/
 │   │   ├── contest/
 │   │   │   ├── page.tsx                    ← 공모전 목록 (즐겨찾기 + 지역별)
 │   │   │   └── matches/page.tsx            ← 공모전 팀원 모집 목록
+│   │   ├── sports/
+│   │   │   ├── page.tsx                    ← 시설 예약 현황 + 파트너 찾기 (v2.2)
+│   │   │   └── partners/page.tsx           ← 파트너 목록 (슬롯 선택 후)
+│   │   ├── admin/
+│   │   │   └── page.tsx                    ← 관리자 대시보드 (v2.2)
 │   │   ├── review/page.tsx                 ← 팀 후기
 │   │   ├── messages/
 │   │   │   ├── page.tsx                    ← 메시지 허브 (탭)
@@ -1252,6 +1725,28 @@ cbnumatch/
 │       │       ├── leave/route.ts          ← DELETE (나가기)
 │       │       └── invite/route.ts         ← GET (초대 목록) / POST (초대)
 │       ├── external-contests/route.ts      ← GET
+│       ├── sports/
+│       │   ├── reservations/route.ts       ← GET (시설 예약 현황)
+│       │   └── partners/route.ts           ← GET (파트너 목록)
+│       ├── profile/
+│       │   ├── contest/route.ts            ← GET / PUT
+│       │   ├── sports/route.ts             ← GET / PUT
+│       │   └── avatar/route.ts             ← POST (Supabase Storage)
+│       ├── profile-matches/
+│       │   ├── route.ts                    ← GET / POST
+│       │   └── [id]/
+│       │       ├── accept/route.ts         ← PATCH
+│       │       ├── reject/route.ts         ← PATCH
+│       │       └── route.ts               ← DELETE
+│       ├── reports/route.ts                ← POST
+│       ├── admin/
+│       │   └── reports/
+│       │       ├── route.ts                ← GET (관리자 전용)
+│       │       └── [id]/route.ts           ← PATCH (처리)
+│       ├── ai/
+│       │   ├── summarize/route.ts          ← POST (공모전 요약)
+│       │   ├── match-reason/route.ts       ← POST (매칭 추천 이유)
+│       │   └── profile-draft/route.ts      ← POST (자기소개 초안)
 │       ├── reviews/route.ts                ← GET / POST
 │       ├── messages/
 │       │   ├── route.ts                    ← GET (목록)
@@ -1284,6 +1779,14 @@ cbnumatch/
 │   └── layout/
 │       ├── Header.tsx
 │       └── BottomNav.tsx
+├── crawlers/                               ← Python 크롤러 (GitHub Actions)
+│   ├── contest_crawler.py                  ← 공모전 크롤러 (contestkorea, wevity 등)
+│   ├── reservation_crawler.py              ← 시설 예약 현황 크롤러
+│   └── requirements.txt
+├── .github/
+│   └── workflows/
+│       ├── contest-crawl.yml               ← 공모전 크롤링 (매일 KST 02:00)
+│       └── reservation-crawl.yml           ← 예약 현황 크롤링 (매 1시간)
 ├── data/
 │   └── contests.ts                         ← 정적 공모전 데이터 (4개 지역, 17개)
 ├── lib/
