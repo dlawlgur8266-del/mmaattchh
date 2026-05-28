@@ -22,6 +22,6 @@ jobs:
         run: python crawlers/reservation_crawler.py
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           sport_username: ${{ secrets.SPORT_USERNAME }}
           sport_PASSWORD: ${{ secrets.SPORT_PASSWORD }}

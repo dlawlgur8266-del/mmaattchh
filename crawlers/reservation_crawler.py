@@ -41,6 +41,7 @@ CRAWL_DAYS      = 7   # 오늘부터 N일치 수집
 # DB facility_id → 사이트 시설 코드 매핑
 # 실제 사이트의 시설 파라미터 값으로 맞춰주세요
 FACILITY_CODES: dict[str, str] = {
+    'main_field':   'MAIN_FIELD',
     'futsal_a':     'FUTSAL_A',
     'futsal_b':     'FUTSAL_B',
     'basketball_a': 'BASKET_A',
@@ -50,8 +51,6 @@ FACILITY_CODES: dict[str, str] = {
     'tennis_c':     'TENNIS_C',
     'tennis_d':     'TENNIS_D',
     'tennis_e':     'TENNIS_E',
-    'small_field':  'SMALL_FIELD',
-    'main_field':   'MAIN_FIELD',
 }
 
 # 운영 시간대 (시설별 기본 타임슬롯 — 스크래핑 실패 시 fallback으로 사용)

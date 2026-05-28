@@ -2,17 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
 const FACILITY_NAMES: Record<string, string> = {
-  futsal_a: '풋살장 A',
-  futsal_b: '풋살장 B',
+  main_field:   '대운동장',
+  futsal_a:     '풋살장 A',
+  futsal_b:     '풋살장 B',
   basketball_a: '농구장 A',
   basketball_b: '농구장 B',
-  tennis_a: '테니스장 A',
-  tennis_b: '테니스장 B',
-  tennis_c: '테니스장 C',
-  tennis_d: '테니스장 D',
-  tennis_e: '테니스장 E',
-  small_field: '소운동장',
-  main_field: '종합운동장',
+  tennis_a:     '테니스 A',
+  tennis_b:     '테니스 B',
+  tennis_c:     '테니스 C',
+  tennis_d:     '테니스 D',
+  tennis_e:     '테니스 E',
 }
 
 export async function GET(req: NextRequest) {

@@ -8,7 +8,7 @@ const RESERVATION_STATUS_URL = 'https://sports.chungbuk.ac.kr/cbnu_facilities3_2
 const RESERVATION_APPLY_URL  = 'https://sports.chungbuk.ac.kr/cbnu_facilities3_1'
 
 const FACILITIES = [
-  { id: 'main_field',   name: '종합운동장', sport: '축구' },
+  { id: 'main_field',   name: '대운동장',   sport: '축구' },
   { id: 'futsal_a',     name: '풋살장 A',   sport: '풋살' },
   { id: 'futsal_b',     name: '풋살장 B',   sport: '풋살' },
   { id: 'basketball_a', name: '농구장 A',   sport: '농구' },
@@ -18,7 +18,6 @@ const FACILITIES = [
   { id: 'tennis_c',     name: '테니스 C',   sport: '테니스' },
   { id: 'tennis_d',     name: '테니스 D',   sport: '테니스' },
   { id: 'tennis_e',     name: '테니스 E',   sport: '테니스' },
-  { id: 'small_field',  name: '소운동장',   sport: '축구' },
 ] as const
 
 type FacilityId = typeof FACILITIES[number]['id']
