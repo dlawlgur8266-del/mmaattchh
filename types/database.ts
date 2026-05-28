@@ -16,17 +16,117 @@ export type NotificationType =
 
 export type ContestMatchStatus = '모집중' | '마감'
 
+export type ProfileMatchStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled'
+export type ProfileMatchType = 'contest' | 'sports'
+export type ReportReason = '불쾌한 언행' | '허위 정보' | '스팸' | '기타'
+export type ReportStatus = 'pending' | 'resolved' | 'dismissed'
+export type Gender = 'male' | 'female' | 'other'
+export type ContestField = 'marketing' | 'video' | 'design' | 'literature' | 'it' | 'arts' | 'academic'
+export type FacilityId =
+  | 'futsal_a' | 'futsal_b'
+  | 'basketball_a' | 'basketball_b'
+  | 'tennis_a' | 'tennis_b' | 'tennis_c' | 'tennis_d' | 'tennis_e'
+  | 'small_field' | 'main_field'
+export type ReservationStatus = 'available' | 'reserved' | 'closed'
+
 export interface Profile {
   id: string
   username: string
   nickname: string
   full_name: string
   student_id: string
-  skill_level: SkillLevel          // 스포츠 실력 (초급/중급/고수)
-  contest_count?: number           // 공모전 출전 횟수 (0~10)
-  department?: string              // 소속 학과
+  skill_level: SkillLevel
+  contest_count?: number
+  department?: string
+  avatar_url?: string | null
+  role?: 'user' | 'admin'
+  is_active?: boolean
   created_at: string
   updated_at: string
+}
+
+export interface ContestProfile {
+  id: string
+  user_id: string
+  department: string | null
+  gender: Gender | null
+  age: number | null
+  contest_count: number
+  certificates: string[]
+  fields: string[]
+  intro: string | null
+  is_visible: boolean
+  created_at: string
+  updated_at: string
+  profiles?: Profile
+}
+
+export interface SportsProfile {
+  id: string
+  user_id: string
+  gender: Gender | null
+  age: number | null
+  sports: string[]
+  career_years: number
+  is_pro: boolean
+  intro: string | null
+  is_visible: boolean
+  created_at: string
+  updated_at: string
+  profiles?: Profile
+}
+
+export interface SportsReservation {
+  id: string
+  facility: FacilityId
+  reservation_date: string
+  start_time: string
+  end_time: string
+  status: ReservationStatus
+  last_crawled_at: string
+}
+
+export interface ProfileMatch {
+  id: string
+  type: ProfileMatchType
+  requester_id: string
+  receiver_id: string
+  message: string | null
+  status: ProfileMatchStatus
+  created_at: string
+  updated_at: string
+  requester?: Profile
+  receiver?: Profile
+}
+
+export interface Report {
+  id: string
+  reporter_id: string
+  reported_id: string
+  reason: ReportReason
+  detail: string | null
+  status: ReportStatus
+  created_at: string
+  reporter?: Profile
+  reported?: Profile
+}
+
+export interface Contest {
+  id: string
+  title: string
+  organizer: string | null
+  field: ContestField
+  region: string
+  start_date: string | null
+  end_date: string
+  max_participants: number | null
+  url: string
+  thumbnail_url: string | null
+  is_active: boolean
+  source: 'contestkorea' | 'wevity' | 'linkareer'
+  summary?: string | null
+  last_crawled_at: string
+  created_at: string
 }
 
 export interface Match {

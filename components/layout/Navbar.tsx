@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Trophy, PenSquare, Star, User, MessageCircle, Swords } from 'lucide-react'
+import { Trophy, PenSquare, Star, User, MessageCircle, Swords, Dumbbell } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
   { href: '/match', label: '매치', icon: Swords },
   { href: '/contest', label: '공모전', icon: Trophy },
+  { href: '/sports', label: '시설 예약', icon: Dumbbell },
   { href: '/match/write', label: '매치글 작성', icon: PenSquare },
   { href: '/review', label: '팀 후기', icon: Star },
   { href: '/messages', label: '메시지', icon: MessageCircle },
@@ -24,8 +25,9 @@ export function Navbar() {
         {navItems.map(({ href, label, icon: Icon }) => {
           const active =
             pathname === href ||
-            (href !== '/match' && href !== '/contest' && pathname.startsWith(href)) ||
-            (href === '/contest' && pathname.startsWith('/contest'))
+            (href !== '/match' && href !== '/contest' && href !== '/sports' && pathname.startsWith(href)) ||
+            (href === '/contest' && pathname.startsWith('/contest')) ||
+            (href === '/sports' && pathname.startsWith('/sports'))
           return (
             <Link
               key={href}
@@ -50,8 +52,9 @@ export function Navbar() {
           {navItems.map(({ href, label, icon: Icon }) => {
             const active =
               pathname === href ||
-              (href !== '/match' && href !== '/contest' && pathname.startsWith(href)) ||
-              (href === '/contest' && pathname.startsWith('/contest'))
+              (href !== '/match' && href !== '/contest' && href !== '/sports' && pathname.startsWith(href)) ||
+              (href === '/contest' && pathname.startsWith('/contest')) ||
+              (href === '/sports' && pathname.startsWith('/sports'))
             return (
               <Link
                 key={href}
