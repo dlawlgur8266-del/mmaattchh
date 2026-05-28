@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Users, Zap, MapPin, Calendar, Clock } from 'lucide-react'
 import { SportBadge, LevelBadge, StatusBadge } from '@/components/ui/Badge'
 import { PendingApplications } from './PendingApplications'
@@ -40,6 +40,11 @@ export function MatchCard({
   const [applied, setApplied] = useState(alreadyApplied)
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<MatchStatus>(match.status)
+
+  // 신청 취소 후 부모가 appliedIds를 업데이트하면 신청 버튼 복원
+  useEffect(() => {
+    setApplied(alreadyApplied)
+  }, [alreadyApplied])
 
   const isOwn = currentUserId === match.author_id
   const meta = SPORT_META[match.sport]

@@ -56,13 +56,26 @@ export default function MatchPage() {
   // 실시간 구독 — 매치 상태 변경 시 목록 자동 갱신
   // (확정 → 목록에서 사라짐 / 취소 → 모집중으로 복원되어 자동 재등록)
   useEffect(() => {
-    const channel = supabase
+    // matches 테이블: 상태 변경(확정·취소) 감지
+    const matchChannel = supabase
       .channel('matches-list')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => {
         fetchData()
       })
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+
+    // match_applications 테이블: 신청 취소(DELETE) 감지 → appliedIds 즉시 갱신
+    const appChannel = supabase
+      .channel('match-applications-list')
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'match_applications' }, () => {
+        fetchData()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(matchChannel)
+      supabase.removeChannel(appChannel)
+    }
   }, [supabase, fetchData])
 
   if (loading) return <PageSpinner />
