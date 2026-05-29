@@ -1,10 +1,22 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Clock, ChevronLeft, ChevronRight, Loader2, MapPin, ExternalLink } from 'lucide-react'
+import { Clock, ChevronLeft, ChevronRight, Loader2, ExternalLink } from 'lucide-react'
 
 const RESERVATION_STATUS_URL = 'https://sports.chungbuk.ac.kr/cbnu_facilities3_2'
 const RESERVATION_APPLY_URL  = 'https://sports.chungbuk.ac.kr/cbnu_facilities3_1'
+
+const DEFAULT_HOURS = [9,10,11,12,13,14,15,16,17,18,19,20,21]
+
+function makeDefaultSlots(): Slot[] {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return DEFAULT_HOURS.map(h => ({
+    id: `default-${h}`,
+    start_time: `${pad(h)}:00:00`,
+    end_time:   `${pad(h + 1)}:00:00`,
+    status: 'available' as const,
+  }))
+}
 
 const FACILITIES = [
   { id: 'main_field',   name: '대운동장'  },
@@ -132,14 +144,14 @@ export default function SportsPage() {
   const [slots, setSlots] = useState<Slot[]>([])
   const [loading, setLoading] = useState(false)
   const [lastCrawled, setLastCrawled] = useState<string | null>(null)
-  const [dataEmpty, setDataEmpty] = useState(false)
+  const [isLive, setIsLive] = useState(false)
 
   const currentFacility = FACILITIES.find(f => f.id === selectedFacility)!
 
   const fetchSlots = useCallback(async () => {
     setLoading(true)
     setSlots([])
-    setDataEmpty(false)
+    setIsLive(false)
     try {
       const res = await fetch(
         `/api/sports/reservations?facility=${selectedFacility}&date=${formatDate(selectedDate)}`
@@ -147,12 +159,19 @@ export default function SportsPage() {
       if (!res.ok) throw new Error()
       const json = await res.json()
       const fetched: Slot[] = json.slots ?? []
-      setSlots(fetched)
-      setLastCrawled(json.last_crawled_at ?? null)
-      setDataEmpty(fetched.length === 0)
+      if (fetched.length > 0) {
+        setSlots(fetched)
+        setLastCrawled(json.last_crawled_at ?? null)
+        setIsLive(json.source === 'live' || json.source === 'db')
+      } else {
+        setSlots(makeDefaultSlots())
+        setLastCrawled(null)
+        setIsLive(false)
+      }
     } catch {
-      setSlots([])
-      setDataEmpty(true)
+      setSlots(makeDefaultSlots())
+      setLastCrawled(null)
+      setIsLive(false)
     } finally {
       setLoading(false)
     }
@@ -203,6 +222,11 @@ export default function SportsPage() {
                 month: 'long', day: 'numeric', weekday: 'short',
               })}
             </h2>
+            {!isLive && !loading && (
+              <p className="text-xs text-amber-500 mt-0.5">
+                실시간 데이터 미수신 — 공식 사이트에서 확인 후 신청하세요
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-3">
             {lastCrawled && (
@@ -228,25 +252,6 @@ export default function SportsPage() {
         {loading ? (
           <div className="flex justify-center py-8">
             <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-          </div>
-        ) : dataEmpty ? (
-          <div className="text-center py-8 space-y-3">
-            <MapPin className="w-8 h-8 mx-auto text-gray-300" />
-            <p className="text-sm font-medium text-gray-600">
-              예약 현황을 불러오지 못했습니다.
-            </p>
-            <p className="text-xs text-gray-400">
-              충북대 스포츠 시설 예약 시스템에서 직접 확인하세요.
-            </p>
-            <a
-              href={RESERVATION_STATUS_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors"
-            >
-              <ExternalLink size={14} />
-              예약 현황 확인하기
-            </a>
           </div>
         ) : (
           <div className="space-y-2">
