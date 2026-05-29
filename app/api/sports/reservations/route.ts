@@ -3,21 +3,19 @@ import { createClient } from '@/lib/supabase/server'
 
 const FACILITY_NAMES: Record<string, string> = {
   main_field:   '대운동장',
-  futsal_a:     '풋살장 A',
-  futsal_b:     '풋살장 B',
-  basketball_a: '농구장 A',
-  basketball_b: '농구장 B',
-  tennis_a:     '테니스 A',
-  tennis_b:     '테니스 B',
-  tennis_c:     '테니스 C',
-  tennis_d:     '테니스 D',
-  tennis_e:     '테니스 E',
+  futsal_a:     '풋살장A',
+  futsal_b:     '풋살장B',
+  basketball_a: '농구장A',
+  basketball_b: '농구장B',
+  tennis_a:     '테니스장A',
+  tennis_b:     '테니스장B',
+  tennis_c:     '테니스장C',
+  tennis_d:     '테니스장D',
+  tennis_e:     '테니스장E',
 }
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
 
   const { searchParams } = new URL(req.url)
   const facility = searchParams.get('facility')
