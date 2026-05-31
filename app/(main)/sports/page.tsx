@@ -6,17 +6,6 @@ import { Clock, ChevronLeft, ChevronRight, Loader2, ExternalLink } from 'lucide-
 const RESERVATION_STATUS_URL = 'https://sports.chungbuk.ac.kr/cbnu_facilities3_2'
 const RESERVATION_APPLY_URL  = 'https://sports.chungbuk.ac.kr/cbnu_facilities3_1'
 
-const DEFAULT_HOURS = [9,10,11,12,13,14,15,16,17,18,19,20,21]
-
-function makeDefaultSlots(): Slot[] {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return DEFAULT_HOURS.map(h => ({
-    id: `default-${h}`,
-    start_time: `${pad(h)}:00:00`,
-    end_time:   `${pad(h + 1)}:00:00`,
-    status: 'available' as const,
-  }))
-}
 
 const FACILITIES = [
   { id: 'main_field',   name: '대운동장'  },
@@ -145,6 +134,7 @@ export default function SportsPage() {
   const [loading, setLoading] = useState(false)
   const [lastCrawled, setLastCrawled] = useState<string | null>(null)
   const [isLive, setIsLive] = useState(false)
+  const [dataUnavailable, setDataUnavailable] = useState(false)
 
   const currentFacility = FACILITIES.find(f => f.id === selectedFacility)!
 
@@ -152,6 +142,7 @@ export default function SportsPage() {
     setLoading(true)
     setSlots([])
     setIsLive(false)
+    setDataUnavailable(false)
     try {
       const res = await fetch(
         `/api/sports/reservations?facility=${selectedFacility}&date=${formatDate(selectedDate)}`
@@ -164,14 +155,16 @@ export default function SportsPage() {
         setLastCrawled(json.last_crawled_at ?? null)
         setIsLive(json.source === 'live' || json.source === 'db')
       } else {
-        setSlots(makeDefaultSlots())
+        setSlots([])
         setLastCrawled(null)
         setIsLive(false)
+        setDataUnavailable(true)
       }
     } catch {
-      setSlots(makeDefaultSlots())
+      setSlots([])
       setLastCrawled(null)
       setIsLive(false)
+      setDataUnavailable(true)
     } finally {
       setLoading(false)
     }
@@ -222,9 +215,9 @@ export default function SportsPage() {
                 month: 'long', day: 'numeric', weekday: 'short',
               })}
             </h2>
-            {!isLive && !loading && (
-              <p className="text-xs text-amber-500 mt-0.5">
-                실시간 데이터 미수신 — 공식 사이트에서 확인 후 신청하세요
+            {isLive && lastCrawled && (
+              <p className="text-xs text-green-500 mt-0.5">
+                실시간 데이터 수신 완료
               </p>
             )}
           </div>
@@ -252,6 +245,24 @@ export default function SportsPage() {
         {loading ? (
           <div className="flex justify-center py-8">
             <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+          </div>
+        ) : dataUnavailable ? (
+          <div className="flex flex-col items-center gap-3 py-8 text-center">
+            <p className="text-sm text-gray-500">
+              실시간 예약 현황을 불러올 수 없습니다.
+            </p>
+            <p className="text-xs text-gray-400">
+              공식 사이트에서 직접 예약 가능 시간을 확인해주세요.
+            </p>
+            <a
+              href={RESERVATION_STATUS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            >
+              <ExternalLink size={14} />
+              공식 사이트에서 예약 현황 확인
+            </a>
           </div>
         ) : (
           <div className="space-y-2">
